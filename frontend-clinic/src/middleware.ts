@@ -33,7 +33,7 @@ export function middleware(request: NextRequest) {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https:",
-    "connect-src 'self' https://localhost:7010 https://localhost:7001 wss://localhost:7001 http://localhost:7010 http://localhost:7001 ws://localhost:7001",
+    "connect-src 'self' https://localhost:7110 https://localhost:7101 wss://localhost:7101 http://localhost:7110 http://localhost:7101 ws://localhost:7101",
     "frame-src 'none'",
     "object-src 'none'",
     "base-uri 'self'",
