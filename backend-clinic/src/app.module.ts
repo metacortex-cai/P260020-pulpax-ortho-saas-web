@@ -31,6 +31,7 @@ import { EreceteModule } from './modules/erecete/erecete.module';
 import { EfaturaModule } from './modules/efatura/efatura.module';
 import { AiRadiologyModule } from './modules/ai/ai-radiology.module';
 import { ProtocolsModule } from './modules/protocols/protocols.module';
+import { OrthodonticsModule } from './modules/orthodontics/orthodontics.module';
 
 
 import { validate } from './common/config/env.validation';
@@ -85,6 +86,7 @@ import { validate } from './common/config/env.validation';
     EfaturaModule,
     AiRadiologyModule,
     ProtocolsModule,
+    OrthodonticsModule,
   ],
   controllers: [],
   providers: [
