@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Save, Trash2, Smile, Plus, Loader2, Stethoscope, ClipboardList, CalendarClock, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import {
+  Save, Trash2, Smile, Plus, Loader2, Stethoscope, ClipboardList, CalendarClock, AlertTriangle,
+  Image as ImageIcon, ScanLine, TrendingUp, ShieldCheck, UploadCloud, Eye, X, CalendarPlus,
+} from 'lucide-react';
 import ConfirmModal from '../../../../components/ui/ConfirmModal';
 import { useToastStore } from '../../../../store/toastStore';
 import {
@@ -9,10 +12,15 @@ import {
   OrthoCase,
   OrthoTreatmentTrack,
   OrthoDiagnosis,
+  OrthoRecordSet,
+  OrthoMiniScrewRecord,
+  OrthoGrowthAssessment,
+  OrthoRetentionPlan,
 } from '../../../../lib/services/orthodontics.service';
 import { TreatmentService, Tariff } from '../../../../lib/services/treatment.service';
 import { Employee, EmployeeService } from '../../../../lib/services/employee.service';
 import { formatCurrency } from '../../../../lib/utils/formatCurrency';
+import { resolveDocumentUrl } from '../../../../lib/services/patient.service';
 
 // ─── ICON Scoring System ─────────────────────────────────────────────────────
 
@@ -189,6 +197,54 @@ const ACTIVATION_TYPES = [
   { value: 'EGZERSIZ', label: 'Egzersiz Tekrarı', unit: 'TEKRAR' },
 ];
 
+const RECORD_TYPE_LABELS: Record<string, string> = {
+  FOTO: 'Fotoğraf',
+  OPG: 'Panoramik Röntgen (OPG)',
+  SEFALOMETRIK: 'Sefalometrik Röntgen',
+  EL_BILEK: 'El-Bilek Röntgeni',
+  CBCT: 'CBCT',
+  STL: 'Ölçü / STL Tarama',
+};
+
+const PHASE_LABELS: Record<string, string> = {
+  FAZ01: 'Faz 01 — İlk Başvuru',
+  FAZ02: 'Faz 02 — Muayene & Kayıt',
+  FAZ03: 'Faz 03 — Planlama',
+  FAZ04: 'Faz 04 — Aparey Yerleştirme',
+  FAZ05: 'Faz 05 — Aktif Tedavi',
+  FAZ06: 'Faz 06 — Bitirme',
+  FAZ07: 'Faz 07 — Aparey Çıkarma',
+  FAZ08: 'Faz 08 — Retansiyon',
+};
+
+const MINISCREW_STATUS_LABELS: Record<string, { label: string; style: string }> = {
+  AKTIF: { label: 'Aktif', style: 'bg-emerald-100 text-emerald-700 border border-emerald-200' },
+  CIKARILDI: { label: 'Çıkarıldı', style: 'bg-slate-100 text-slate-500 border border-slate-200' },
+  KAYBEDILDI: { label: 'Kaybedildi', style: 'bg-red-100 text-red-700 border border-red-200' },
+};
+
+const GROWTH_PHASE_LABELS: Record<string, string> = {
+  ATILIM_ONCESI: 'Atılım Öncesi',
+  ATILIMDA: 'Atılımda',
+  ATILIM_SONRASI: 'Atılım Sonrası',
+};
+
+const RETAINER_TYPE_LABELS: Record<string, string> = {
+  SABIT_LINGUAL: 'Sabit (Lingual Tel)',
+  HAWLEY: 'Hawley',
+  ESSIX: 'Essix (Şeffaf)',
+};
+
+const RETENTION_STATUS_LABELS: Record<string, { label: string; style: string }> = {
+  AKTIF: { label: 'Aktif', style: 'bg-emerald-100 text-emerald-700 border border-emerald-200' },
+  GEVSEMIS: { label: 'Gevşemiş', style: 'bg-amber-100 text-amber-700 border border-amber-200' },
+  KIRIK_KAYIP: { label: 'Kırık / Kayıp', style: 'bg-red-100 text-red-700 border border-red-200' },
+  YENILENDI: { label: 'Yenilendi', style: 'bg-blue-100 text-blue-700 border border-blue-200' },
+  TAMAMLANDI: { label: 'Tamamlandı', style: 'bg-slate-100 text-slate-500 border border-slate-200' },
+};
+
+const RETENTION_SCHEDULE_PRESETS = ['1. Ay', '3. Ay', '6. Ay', '1. Yıl'];
+
 function formatDate(iso?: string | null): string {
   if (!iso) return '—';
   return iso.split('T')[0];
@@ -218,7 +274,7 @@ const defaultDiagnosisForm = {
 export default function OrthodonticsTab({ patient }: { patient: any }) {
   const { addToast } = useToastStore();
 
-  const [innerTab, setInnerTab] = useState<'tani' | 'plan' | 'timeline'>('tani');
+  const [innerTab, setInnerTab] = useState<'tani' | 'plan' | 'timeline' | 'gallery' | 'miniscrew' | 'growth' | 'retention'>('tani');
   const [loading, setLoading] = useState(true);
   const [cases, setCases] = useState<OrthoCase[]>([]);
   const [activeCaseId, setActiveCaseId] = useState<string>('');
@@ -232,6 +288,18 @@ export default function OrthodonticsTab({ patient }: { patient: any }) {
     () => tariffs.filter(t => t.masterTreatment?.category === 'Ortodonti'),
     [tariffs],
   );
+
+  // Büyüme Değerlendirmesi sekmesi öncelikle büyüme çağı (~6-16 yaş) hastalar için
+  // anlamlıdır; yaş bilinmiyorsa veya aralık dışındaysa sekme yine erişilebilir
+  // kalır, sadece bilgilendirici bir not gösterilir (hard-block yok).
+  const patientAge: number | null = useMemo(() => {
+    if (!patient?.birthDate) return null;
+    const birth = new Date(patient.birthDate);
+    if (Number.isNaN(birth.getTime())) return null;
+    const diffMs = Date.now() - birth.getTime();
+    return Math.floor(diffMs / (365.25 * 24 * 60 * 60 * 1000));
+  }, [patient?.birthDate]);
+  const isGrowthAgeRelevant = patientAge == null || (patientAge >= 6 && patientAge <= 16);
 
   const loadData = useCallback(async (keepCaseId?: string) => {
     if (!patient?.id) return;
@@ -368,16 +436,20 @@ export default function OrthodonticsTab({ patient }: { patient: any }) {
         </div>
 
         {/* ── Inner Tab Header ─────────────────────────────────────────── */}
-        <div className="flex border-b border-slate-100 dark:border-white/5">
+        <div className="flex border-b border-slate-100 dark:border-white/5 overflow-x-auto no-scrollbar">
           {([
             { key: 'tani', label: 'Tanı', icon: <Stethoscope size={14} /> },
             { key: 'plan', label: 'Tedavi Planı', icon: <ClipboardList size={14} /> },
             { key: 'timeline', label: 'Zaman Çizelgesi', icon: <CalendarClock size={14} /> },
+            { key: 'gallery', label: 'Kayıt Galerisi', icon: <ImageIcon size={14} /> },
+            { key: 'miniscrew', label: 'Mini Vida', icon: <ScanLine size={14} /> },
+            { key: 'growth', label: 'Büyüme Değerlendirmesi', icon: <TrendingUp size={14} /> },
+            { key: 'retention', label: 'Retansiyon', icon: <ShieldCheck size={14} /> },
           ] as const).map(tab => (
             <button
               key={tab.key}
               onClick={() => setInnerTab(tab.key)}
-              className={`flex items-center gap-2 px-6 py-4 text-[13px] font-bold transition-colors border-b-2 ${
+              className={`flex items-center gap-2 px-6 py-4 text-[13px] font-bold transition-colors border-b-2 whitespace-nowrap ${
                 innerTab === tab.key
                   ? 'border-metronic-primary text-metronic-primary'
                   : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
@@ -402,6 +474,28 @@ export default function OrthodonticsTab({ patient }: { patient: any }) {
         )}
         {innerTab === 'timeline' && (
           <TimelineSection orthoCase={activeCase} onChanged={() => loadData(activeCase.id)} />
+        )}
+        {innerTab === 'gallery' && (
+          <RecordGallerySection orthoCase={activeCase} onChanged={() => loadData(activeCase.id)} />
+        )}
+        {innerTab === 'miniscrew' && (
+          <MiniScrewSection
+            orthoCase={activeCase}
+            orthoTariffs={orthoTariffs}
+            doctors={doctors}
+            onChanged={() => loadData(activeCase.id)}
+          />
+        )}
+        {innerTab === 'growth' && (
+          <GrowthAssessmentSection
+            orthoCase={activeCase}
+            isAgeRelevant={isGrowthAgeRelevant}
+            patientAge={patientAge}
+            onChanged={() => loadData(activeCase.id)}
+          />
+        )}
+        {innerTab === 'retention' && (
+          <RetentionPlanSection orthoCase={activeCase} onChanged={() => loadData(activeCase.id)} />
         )}
       </div>
     </div>
@@ -1380,6 +1474,853 @@ function TimelineSection({
         onConfirm={() => confirmDelete && handleDelete(confirmDelete)}
         title="Kaydı Sil"
         message="Bu ilerleme kaydını silmek istediğinize emin misiniz?"
+      />
+    </div>
+  );
+}
+
+// ─── Kayıt Galerisi (Faz 02 & 07) ────────────────────────────────────────────
+
+const defaultUploadForm = {
+  recordType: 'FOTO',
+  phase: 'FAZ02',
+  takenAt: new Date().toISOString().slice(0, 10),
+  description: '',
+};
+
+function RecordGallerySection({
+  orthoCase,
+  onChanged,
+}: {
+  orthoCase: OrthoCase;
+  onChanged: () => Promise<void> | void;
+}) {
+  const { addToast } = useToastStore();
+  const [uploadForm, setUploadForm] = useState({ ...defaultUploadForm });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [phaseFilter, setPhaseFilter] = useState<string>('ALL');
+  const [previewRecord, setPreviewRecord] = useState<OrthoRecordSet | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const records = orthoCase.recordSets;
+  const filtered = phaseFilter === 'ALL' ? records : records.filter(r => r.phase === phaseFilter);
+
+  const faz02Records = records.filter(r => r.phase === 'FAZ02');
+  const faz07Records = records.filter(r => r.phase === 'FAZ07');
+  const showComparison = faz02Records.length > 0 && faz07Records.length > 0;
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      addToast({ type: 'warning', title: 'Uyarı', message: 'Lütfen bir dosya seçin.' });
+      return;
+    }
+    try {
+      setUploading(true);
+      await OrthodonticsService.uploadRecord(orthoCase.id, selectedFile, {
+        recordType: uploadForm.recordType,
+        phase: uploadForm.phase,
+        description: uploadForm.description || undefined,
+        takenAt: uploadForm.takenAt || undefined,
+      });
+      addToast({ type: 'success', title: 'Yüklendi', message: 'Kayıt galeriye eklendi.' });
+      setSelectedFile(null);
+      setUploadForm({ ...defaultUploadForm });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      await onChanged();
+    } catch (e) {
+      console.error('Kayıt yüklenemedi', e);
+      addToast({ type: 'error', title: 'Hata', message: 'Kayıt yüklenemedi.' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await OrthodonticsService.deleteRecord(id);
+      setConfirmDeleteId(null);
+      setPreviewRecord(null);
+      await onChanged();
+    } catch {
+      addToast({ type: 'error', title: 'Hata', message: 'Kayıt silinemedi.' });
+    }
+  };
+
+  const RecordCard = ({ record }: { record: OrthoRecordSet }) => (
+    <div className="group relative bg-white dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+      <div className="aspect-[4/3] bg-slate-50 dark:bg-white/5 relative overflow-hidden flex items-center justify-center">
+        {record.fileType?.startsWith('image/') ? (
+          // eslint-disable-next-line @next/next/no-img-element -- dynamic backend-hosted file URL, not a static asset next/image can optimize
+          <img src={resolveDocumentUrl(record.fileUrl)} alt={record.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center gap-2 text-slate-300 dark:text-slate-600">
+            <ScanLine size={36} />
+            <span className="text-[10px] font-bold uppercase">{RECORD_TYPE_LABELS[record.recordType] ?? record.recordType}</span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+          <button onClick={() => setPreviewRecord(record)} className="w-8 h-8 rounded-full bg-white text-slate-700 flex items-center justify-center hover:bg-metronic-primary hover:text-white transition-colors"><Eye size={14} /></button>
+          <button onClick={() => setConfirmDeleteId(record.id)} className="w-8 h-8 rounded-full bg-white text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"><Trash2 size={14} /></button>
+        </div>
+        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-slate-600 whitespace-nowrap">
+          {record.phase}
+        </span>
+      </div>
+      <div className="p-2.5">
+        <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate m-0">{record.name}</p>
+        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 mb-0">{formatDate(record.takenAt)}</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Yükleme formu */}
+      <div className="p-4 bg-slate-50 dark:bg-white/[0.03] rounded-xl border border-slate-100 dark:border-white/10 space-y-4">
+        <h5 className="text-[13px] font-bold text-slate-700 dark:text-slate-200 m-0">Yeni Kayıt Yükle</h5>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Kayıt Tipi</label>
+            <select className="m-input" value={uploadForm.recordType} onChange={e => setUploadForm(f => ({ ...f, recordType: e.target.value }))}>
+              {Object.entries(RECORD_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Faz Etiketi</label>
+            <select className="m-input" value={uploadForm.phase} onChange={e => setUploadForm(f => ({ ...f, phase: e.target.value }))}>
+              {Object.entries(PHASE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Çekim Tarihi</label>
+            <input type="date" className="m-input" value={uploadForm.takenAt}
+              onChange={e => setUploadForm(f => ({ ...f, takenAt: e.target.value }))} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Açıklama</label>
+            <input type="text" className="m-input" placeholder="İsteğe bağlı..." value={uploadForm.description}
+              onChange={e => setUploadForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+        </div>
+        <input ref={fileInputRef} type="file" className="hidden" onChange={e => setSelectedFile(e.target.files?.[0] || null)} />
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => { e.preventDefault(); setSelectedFile(e.dataTransfer.files?.[0] || null); }}
+          className="p-6 border-2 border-dashed border-slate-200 dark:border-white/10 rounded-xl text-center bg-white dark:bg-white/[0.02] hover:border-metronic-primary/50 transition-colors cursor-pointer"
+        >
+          <UploadCloud className="mx-auto text-slate-300 dark:text-slate-600 mb-2" size={26} />
+          {selectedFile ? (
+            <p className="text-[12px] font-bold text-metronic-primary m-0">{selectedFile.name} <span className="text-slate-400 font-medium">({(selectedFile.size / 1024).toFixed(0)} KB)</span></p>
+          ) : (
+            <p className="text-[12px] font-bold text-slate-500 dark:text-slate-400 m-0">Dosyayı sürükleyin veya <span className="text-metronic-primary">bilgisayarınızdan seçin</span></p>
+          )}
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 mb-0">Foto/röntgen/STL — Maks 25MB</p>
+        </div>
+        <div className="flex justify-end">
+          <button
+            onClick={handleUpload}
+            disabled={uploading || !selectedFile}
+            className="flex items-center gap-2 px-5 py-2 bg-metronic-primary hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-[13px] font-bold transition-colors shadow-sm"
+          >
+            {uploading ? <Loader2 size={15} className="animate-spin" /> : <UploadCloud size={15} />} Yükle
+          </button>
+        </div>
+      </div>
+
+      {/* Öncesi/Sonrası karşılaştırma */}
+      {showComparison && (
+        <div>
+          <p className="text-[12px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mb-3">
+            Öncesi / Sonrası Karşılaştırma (Faz 02 → Faz 07)
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-3 bg-slate-50 dark:bg-white/[0.03] rounded-xl border border-slate-100 dark:border-white/10">
+              <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Öncesi — {PHASE_LABELS.FAZ02}</p>
+              <div className="grid grid-cols-2 gap-3">
+                {faz02Records.map(r => <RecordCard key={r.id} record={r} />)}
+              </div>
+            </div>
+            <div className="p-3 bg-slate-50 dark:bg-white/[0.03] rounded-xl border border-slate-100 dark:border-white/10">
+              <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Sonrası — {PHASE_LABELS.FAZ07}</p>
+              <div className="grid grid-cols-2 gap-3">
+                {faz07Records.map(r => <RecordCard key={r.id} record={r} />)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Galeri */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[12px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider m-0">
+            Tüm Kayıtlar ({filtered.length})
+          </p>
+          <select className="m-input !h-8 !py-0 text-[12px] w-56" value={phaseFilter} onChange={e => setPhaseFilter(e.target.value)}>
+            <option value="ALL">Tüm Fazlar</option>
+            {Object.entries(PHASE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
+        {filtered.length === 0 ? (
+          <div className="py-12 text-center text-slate-400 dark:text-slate-500 text-[13px]">Bu filtreye uygun kayıt yok.</div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {filtered.map(r => <RecordCard key={r.id} record={r} />)}
+          </div>
+        )}
+      </div>
+
+      {/* Önizleme */}
+      {previewRecord && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setPreviewRecord(null)}>
+          <div className="relative max-w-4xl w-full max-h-[90vh] bg-white dark:bg-[#1c1f2e] rounded-2xl overflow-hidden shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-slate-800 dark:text-white m-0">{previewRecord.name}</h4>
+                <p className="text-[11px] text-slate-400 mt-0.5 mb-0">{PHASE_LABELS[previewRecord.phase] ?? previewRecord.phase} · {formatDate(previewRecord.takenAt)}</p>
+              </div>
+              <button onClick={() => setPreviewRecord(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full text-slate-400"><X size={20} /></button>
+            </div>
+            <div className="p-5 flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0f1117] flex items-center justify-center">
+              {previewRecord.fileType?.startsWith('image/') ? (
+                // eslint-disable-next-line @next/next/no-img-element -- dynamic backend-hosted file URL, not a static asset next/image can optimize
+                <img src={resolveDocumentUrl(previewRecord.fileUrl)} alt={previewRecord.name} className="max-w-full max-h-[70vh] object-contain rounded-lg" />
+              ) : (
+                <div className="p-16 text-center">
+                  <ScanLine size={56} className="mx-auto mb-4 text-slate-300" />
+                  <p className="text-slate-500 dark:text-slate-400 font-bold">Bu dosya türü için önizleme desteklenmiyor.</p>
+                  <button
+                    onClick={() => window.open(resolveDocumentUrl(previewRecord.fileUrl), '_blank')}
+                    className="mt-4 px-6 py-2 bg-metronic-primary text-white rounded-lg font-bold"
+                  >
+                    Dosyayı İndir
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => confirmDeleteId && handleDelete(confirmDeleteId)}
+        title="Kaydı Sil"
+        message="Bu galeri kaydını silmek istediğinize emin misiniz?"
+      />
+    </div>
+  );
+}
+
+// ─── Mini Vida ────────────────────────────────────────────────────────────────
+
+const defaultMiniScrewForm = {
+  region: '',
+  purpose: '',
+  placementDate: new Date().toISOString().slice(0, 10),
+  tariffId: '',
+  doctorId: '',
+  note: '',
+};
+
+function MiniScrewSection({
+  orthoCase,
+  orthoTariffs,
+  doctors,
+  onChanged,
+}: {
+  orthoCase: OrthoCase;
+  orthoTariffs: Tariff[];
+  doctors: Employee[];
+  onChanged: () => Promise<void> | void;
+}) {
+  const { addToast } = useToastStore();
+  const [formOpen, setFormOpen] = useState(orthoCase.miniScrews.length === 0);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ ...defaultMiniScrewForm });
+  const [followUpDrafts, setFollowUpDrafts] = useState<Record<string, string>>({});
+
+  const miniScrewTariffs = useMemo(() => {
+    const named = orthoTariffs.filter(t => t.masterTreatment.name.toLowerCase().includes('mini vida'));
+    return named.length > 0 ? named : orthoTariffs;
+  }, [orthoTariffs]);
+
+  const handleCreate = async () => {
+    if (!form.region.trim()) {
+      addToast({ type: 'warning', title: 'Uyarı', message: 'Bölge zorunludur.' });
+      return;
+    }
+    if (form.tariffId && !form.doctorId) {
+      addToast({ type: 'warning', title: 'Uyarı', message: 'Faturalı mini vida için hekim seçimi zorunludur.' });
+      return;
+    }
+    try {
+      setSaving(true);
+      await OrthodonticsService.addMiniScrew(orthoCase.id, {
+        region: form.region,
+        purpose: form.purpose || undefined,
+        placementDate: form.placementDate,
+        tariffId: form.tariffId || undefined,
+        doctorId: form.tariffId ? form.doctorId : undefined,
+        note: form.note || undefined,
+      } as any);
+      addToast({ type: 'success', title: 'Kaydedildi', message: 'Mini vida kaydı eklendi.' });
+      setForm({ ...defaultMiniScrewForm });
+      setFormOpen(false);
+      await onChanged();
+    } catch (e) {
+      console.error('Mini vida kaydedilemedi', e);
+      addToast({ type: 'error', title: 'Hata', message: 'Mini vida kaydedilemedi.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStatusChange = async (screw: OrthoMiniScrewRecord, status: string) => {
+    try {
+      await OrthodonticsService.updateMiniScrew(screw.id, {
+        status,
+        removalDate: status === 'CIKARILDI' || status === 'KAYBEDILDI' ? new Date().toISOString() : undefined,
+      });
+      await onChanged();
+    } catch {
+      addToast({ type: 'error', title: 'Hata', message: 'Durum güncellenemedi.' });
+    }
+  };
+
+  const handleAddFollowUp = async (screw: OrthoMiniScrewRecord) => {
+    const draft = followUpDrafts[screw.id];
+    if (!draft) return;
+    try {
+      await OrthodonticsService.updateMiniScrew(screw.id, {
+        followUpDates: [...screw.followUpDates, draft],
+      });
+      setFollowUpDrafts(prev => ({ ...prev, [screw.id]: '' }));
+      await onChanged();
+    } catch {
+      addToast({ type: 'error', title: 'Hata', message: 'Kontrol tarihi eklenemedi.' });
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-5">
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider m-0">
+          Mini Vida (TAD) Kayıtları ({orthoCase.miniScrews.length})
+        </p>
+        <button
+          onClick={() => setFormOpen(o => !o)}
+          className="flex items-center gap-1.5 px-4 py-1.5 bg-metronic-primary hover:bg-blue-600 text-white rounded-lg text-[12px] font-bold transition-colors shadow-sm"
+        >
+          {formOpen ? 'Formu Kapat' : <><Plus size={13} /> Yeni Mini Vida</>}
+        </button>
+      </div>
+
+      {formOpen && (
+        <div className="p-4 bg-slate-50 dark:bg-white/[0.03] rounded-xl border border-slate-100 dark:border-white/10 space-y-4">
+          <h5 className="text-[13px] font-bold text-slate-700 dark:text-slate-200 m-0">Yeni Mini Vida Kaydı</h5>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Bölge <span className="text-metronic-danger">*</span></label>
+              <input type="text" className="m-input" placeholder="Örn: Üst sağ bukkal 15-16 arası"
+                value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Amaç</label>
+              <input type="text" className="m-input" placeholder="Ankraj amacı..."
+                value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Yerleştirme Tarihi</label>
+              <input type="date" className="m-input" value={form.placementDate}
+                onChange={e => setForm(f => ({ ...f, placementDate: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tarife (Faturalama)</label>
+              <select className="m-input" value={form.tariffId} onChange={e => setForm(f => ({ ...f, tariffId: e.target.value }))}>
+                <option value="">Faturasız kayıt</option>
+                {miniScrewTariffs.map(t => (
+                  <option key={t.id} value={t.id}>{t.masterTreatment.name} — {formatCurrency(Number(t.price))}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Hekim {form.tariffId && <span className="text-metronic-danger">*</span>}
+              </label>
+              <select className="m-input" value={form.doctorId} onChange={e => setForm(f => ({ ...f, doctorId: e.target.value }))}>
+                <option value="">Seçiniz...</option>
+                {doctors.map(doc => <option key={doc.id} value={doc.id}>{`Dt. ${doc.firstName} ${doc.lastName}`}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Not</label>
+              <input type="text" className="m-input" value={form.note}
+                onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleCreate}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-metronic-primary hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-[13px] font-bold transition-colors shadow-sm"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Kaydet
+            </button>
+          </div>
+        </div>
+      )}
+
+      {orthoCase.miniScrews.length === 0 ? (
+        !formOpen && <div className="py-12 text-center text-slate-400 dark:text-slate-500 text-[13px]">Henüz mini vida kaydı yok.</div>
+      ) : (
+        <div className="space-y-3">
+          {orthoCase.miniScrews.map(screw => {
+            const statusInfo = MINISCREW_STATUS_LABELS[screw.status] ?? MINISCREW_STATUS_LABELS.AKTIF;
+            return (
+              <div key={screw.id} className="p-4 bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-bold text-slate-700 dark:text-slate-200 m-0">{screw.region}</p>
+                    <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5 mb-0">
+                      {screw.purpose || 'Amaç belirtilmemiş'} · Yerleştirme: {formatDate(screw.placementDate)}
+                      {screw.treatmentItem && <> · {formatCurrency(Number(screw.treatmentItem.price))}</>}
+                    </p>
+                  </div>
+                  <select
+                    className="m-input !h-8 !py-0 text-[12px] w-36"
+                    value={screw.status}
+                    onChange={e => handleStatusChange(screw, e.target.value)}
+                  >
+                    {Object.entries(MINISCREW_STATUS_LABELS).map(([value, { label }]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${statusInfo.style}`}>{statusInfo.label}</span>
+                  {screw.followUpDates.map((d, idx) => (
+                    <span key={idx} className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 text-[11px] font-bold rounded whitespace-nowrap">
+                      Kontrol: {formatDate(d)}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    className="m-input !h-8 !py-0 text-[12px] w-40"
+                    value={followUpDrafts[screw.id] ?? ''}
+                    onChange={e => setFollowUpDrafts(prev => ({ ...prev, [screw.id]: e.target.value }))}
+                  />
+                  <button
+                    onClick={() => handleAddFollowUp(screw)}
+                    disabled={!followUpDrafts[screw.id]}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300 rounded-lg text-[11px] font-bold transition-colors"
+                  >
+                    <CalendarPlus size={12} /> Kontrol Tarihi Ekle
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Büyüme Değerlendirmesi ─────────────────────────────────────────────────
+
+const defaultGrowthForm = {
+  xrayDate: new Date().toISOString().slice(0, 10),
+  skeletalAge: '',
+  growthPhase: '',
+  note: '',
+};
+
+function GrowthAssessmentSection({
+  orthoCase,
+  isAgeRelevant,
+  patientAge,
+  onChanged,
+}: {
+  orthoCase: OrthoCase;
+  isAgeRelevant: boolean;
+  patientAge: number | null;
+  onChanged: () => Promise<void> | void;
+}) {
+  const { addToast } = useToastStore();
+  const [formOpen, setFormOpen] = useState(orthoCase.growthAssessments.length === 0);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ ...defaultGrowthForm });
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleCreate = async () => {
+    try {
+      setSaving(true);
+      await OrthodonticsService.addGrowthAssessment(orthoCase.id, {
+        xrayDate: form.xrayDate,
+        skeletalAge: form.skeletalAge || undefined,
+        growthPhase: form.growthPhase || undefined,
+        note: form.note || undefined,
+      } as Partial<OrthoGrowthAssessment>);
+      addToast({ type: 'success', title: 'Kaydedildi', message: 'Büyüme değerlendirmesi eklendi.' });
+      setForm({ ...defaultGrowthForm });
+      setFormOpen(false);
+      await onChanged();
+    } catch (e) {
+      console.error('Büyüme değerlendirmesi kaydedilemedi', e);
+      addToast({ type: 'error', title: 'Hata', message: 'Büyüme değerlendirmesi kaydedilemedi.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await OrthodonticsService.deleteGrowthAssessment(id);
+      setConfirmDeleteId(null);
+      await onChanged();
+    } catch {
+      addToast({ type: 'error', title: 'Hata', message: 'Kayıt silinemedi.' });
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-5">
+      {!isAgeRelevant && (
+        <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg">
+          <AlertTriangle size={15} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-[12px] text-amber-700 dark:text-amber-400 m-0">
+            Bu hasta {patientAge} yaşında — büyüme takibi öncelikle 6-16 yaş aralığındaki büyüme çağı hastaları için anlamlıdır.
+            Yine de gerekirse bu sekmeden kayıt girebilirsiniz.
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider m-0">
+          Büyüme Değerlendirmeleri ({orthoCase.growthAssessments.length})
+        </p>
+        <button
+          onClick={() => setFormOpen(o => !o)}
+          className="flex items-center gap-1.5 px-4 py-1.5 bg-metronic-primary hover:bg-blue-600 text-white rounded-lg text-[12px] font-bold transition-colors shadow-sm"
+        >
+          {formOpen ? 'Formu Kapat' : <><Plus size={13} /> Yeni Değerlendirme</>}
+        </button>
+      </div>
+
+      {formOpen && (
+        <div className="p-4 bg-slate-50 dark:bg-white/[0.03] rounded-xl border border-slate-100 dark:border-white/10 space-y-4">
+          <h5 className="text-[13px] font-bold text-slate-700 dark:text-slate-200 m-0">Yeni Büyüme Değerlendirmesi</h5>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">El-Bilek Röntgen Tarihi</label>
+              <input type="date" className="m-input" value={form.xrayDate}
+                onChange={e => setForm(f => ({ ...f, xrayDate: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">İskelet Yaşı</label>
+              <input type="text" className="m-input" placeholder="Örn: 11 yaş 6 ay" value={form.skeletalAge}
+                onChange={e => setForm(f => ({ ...f, skeletalAge: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Büyüme Atılımı Fazı</label>
+              <select className="m-input" value={form.growthPhase} onChange={e => setForm(f => ({ ...f, growthPhase: e.target.value }))}>
+                <option value="">Seçiniz...</option>
+                {Object.entries(GROWTH_PHASE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Not</label>
+            <textarea className="m-input resize-none" rows={2} value={form.note}
+              onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleCreate}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-metronic-primary hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-[13px] font-bold transition-colors shadow-sm"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Kaydet
+            </button>
+          </div>
+        </div>
+      )}
+
+      {orthoCase.growthAssessments.length === 0 ? (
+        !formOpen && <div className="py-12 text-center text-slate-400 dark:text-slate-500 text-[13px]">Henüz büyüme değerlendirmesi girilmemiş.</div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-white/[0.02]">
+                <th className="py-3 px-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Röntgen Tarihi</th>
+                <th className="py-3 px-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider">İskelet Yaşı</th>
+                <th className="py-3 px-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Büyüme Fazı</th>
+                <th className="py-3 px-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Not</th>
+                <th className="py-3 px-4 text-right"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+              {orthoCase.growthAssessments.map(a => (
+                <tr key={a.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                  <td className="py-3 px-4 text-[13px] font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">{formatDate(a.xrayDate)}</td>
+                  <td className="py-3 px-4 text-[13px] text-slate-600 dark:text-slate-300">{a.skeletalAge || '—'}</td>
+                  <td className="py-3 px-4 text-[13px] text-slate-600 dark:text-slate-300">{a.growthPhase ? GROWTH_PHASE_LABELS[a.growthPhase] ?? a.growthPhase : '—'}</td>
+                  <td className="py-3 px-4 text-[12px] text-slate-500 dark:text-slate-400">{a.note || '—'}</td>
+                  <td className="py-3 px-4 text-right">
+                    <button
+                      onClick={() => setConfirmDeleteId(a.id)}
+                      className="text-slate-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                      title="Sil"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => confirmDeleteId && handleDelete(confirmDeleteId)}
+        title="Kaydı Sil"
+        message="Bu büyüme değerlendirmesini silmek istediğinize emin misiniz?"
+      />
+    </div>
+  );
+}
+
+// ─── Retansiyon (Faz 08) ─────────────────────────────────────────────────────
+
+const defaultRetentionForm = {
+  retainerType: 'ESSIX',
+  archCoverage: 'CIFT',
+  deliveryDate: new Date().toISOString().slice(0, 10),
+  usageInstruction: '',
+  note: '',
+};
+
+function RetentionPlanSection({
+  orthoCase,
+  onChanged,
+}: {
+  orthoCase: OrthoCase;
+  onChanged: () => Promise<void> | void;
+}) {
+  const { addToast } = useToastStore();
+  const allTracksFinished = orthoCase.tracks.length > 0 && orthoCase.tracks.every(t => t.status === 'TAMAMLANDI' || t.status === 'IPTAL');
+  const [formOpen, setFormOpen] = useState(orthoCase.retentionPlans.length === 0);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ ...defaultRetentionForm });
+  const [schedule, setSchedule] = useState<Record<string, string>>({});
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleCreate = async () => {
+    try {
+      setSaving(true);
+      const followUpSchedule = RETENTION_SCHEDULE_PRESETS
+        .filter(label => schedule[label])
+        .map(label => ({ label, dueDate: schedule[label] }));
+      await OrthodonticsService.addRetentionPlan(orthoCase.id, {
+        retainerType: form.retainerType,
+        archCoverage: form.archCoverage,
+        deliveryDate: form.deliveryDate || undefined,
+        usageInstruction: form.usageInstruction || undefined,
+        followUpSchedule: followUpSchedule.length > 0 ? followUpSchedule : undefined,
+        note: form.note || undefined,
+      } as Partial<OrthoRetentionPlan>);
+      addToast({ type: 'success', title: 'Kaydedildi', message: 'Retansiyon planı oluşturuldu.' });
+      setForm({ ...defaultRetentionForm });
+      setSchedule({});
+      setFormOpen(false);
+      await onChanged();
+    } catch (e) {
+      console.error('Retansiyon planı kaydedilemedi', e);
+      addToast({ type: 'error', title: 'Hata', message: 'Retansiyon planı kaydedilemedi.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStatusChange = async (plan: OrthoRetentionPlan, status: string) => {
+    try {
+      await OrthodonticsService.updateRetentionPlan(plan.id, { status });
+      await onChanged();
+    } catch {
+      addToast({ type: 'error', title: 'Hata', message: 'Durum güncellenemedi.' });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await OrthodonticsService.deleteRetentionPlan(id);
+      setConfirmDeleteId(null);
+      await onChanged();
+    } catch {
+      addToast({ type: 'error', title: 'Hata', message: 'Kayıt silinemedi.' });
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-5">
+      {allTracksFinished && orthoCase.retentionPlans.length === 0 && (
+        <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg">
+          <ShieldCheck size={15} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+          <p className="text-[12px] text-blue-700 dark:text-blue-400 m-0">
+            Bu vakadaki tüm tedavi track&apos;leri tamamlanmış görünüyor — retansiyon planı oluşturmanın zamanı gelmiş olabilir.
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider m-0">
+          Retansiyon Planları ({orthoCase.retentionPlans.length})
+        </p>
+        <button
+          onClick={() => setFormOpen(o => !o)}
+          className="flex items-center gap-1.5 px-4 py-1.5 bg-metronic-primary hover:bg-blue-600 text-white rounded-lg text-[12px] font-bold transition-colors shadow-sm"
+        >
+          {formOpen ? 'Formu Kapat' : <><Plus size={13} /> Yeni Retansiyon Planı</>}
+        </button>
+      </div>
+
+      {formOpen && (
+        <div className="p-4 bg-slate-50 dark:bg-white/[0.03] rounded-xl border border-slate-100 dark:border-white/10 space-y-4">
+          <h5 className="text-[13px] font-bold text-slate-700 dark:text-slate-200 m-0">Yeni Retansiyon Planı</h5>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Retainer Tipi</label>
+              <select className="m-input" value={form.retainerType} onChange={e => setForm(f => ({ ...f, retainerType: e.target.value }))}>
+                {Object.entries(RETAINER_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ark Kapsamı</label>
+              <select className="m-input" value={form.archCoverage} onChange={e => setForm(f => ({ ...f, archCoverage: e.target.value }))}>
+                <option value="TEK">Tek Çene</option>
+                <option value="CIFT">Çift Çene</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Teslim Tarihi</label>
+              <input type="date" className="m-input" value={form.deliveryDate}
+                onChange={e => setForm(f => ({ ...f, deliveryDate: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Kullanım Talimatı</label>
+            <input type="text" className="m-input" placeholder="İlk 3-6 ay tam gün, sonra sadece gece..." value={form.usageInstruction}
+              onChange={e => setForm(f => ({ ...f, usageInstruction: e.target.value }))} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Kontrol Takvimi</label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {RETENTION_SCHEDULE_PRESETS.map(label => (
+                <div key={label} className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{label}</span>
+                  <input type="date" className="m-input" value={schedule[label] ?? ''}
+                    onChange={e => setSchedule(prev => ({ ...prev, [label]: e.target.value }))} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Not</label>
+            <textarea className="m-input resize-none" rows={2} value={form.note}
+              onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleCreate}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-metronic-primary hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-[13px] font-bold transition-colors shadow-sm"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Kaydet
+            </button>
+          </div>
+        </div>
+      )}
+
+      {orthoCase.retentionPlans.length === 0 ? (
+        !formOpen && <div className="py-12 text-center text-slate-400 dark:text-slate-500 text-[13px]">Henüz retansiyon planı oluşturulmamış.</div>
+      ) : (
+        <div className="space-y-3">
+          {orthoCase.retentionPlans.map(plan => {
+            const statusInfo = RETENTION_STATUS_LABELS[plan.status] ?? RETENTION_STATUS_LABELS.AKTIF;
+            const scheduleEntries: { label: string; dueDate: string }[] = Array.isArray(plan.followUpSchedule) ? plan.followUpSchedule : [];
+            return (
+              <div key={plan.id} className="p-4 bg-white dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-bold text-slate-700 dark:text-slate-200 m-0">
+                      {RETAINER_TYPE_LABELS[plan.retainerType] ?? plan.retainerType} — {plan.archCoverage === 'CIFT' ? 'Çift Çene' : 'Tek Çene'}
+                    </p>
+                    <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5 mb-0">
+                      Teslim: {formatDate(plan.deliveryDate)}
+                      {plan.usageInstruction && <> · {plan.usageInstruction}</>}
+                    </p>
+                  </div>
+                  <select
+                    className="m-input !h-8 !py-0 text-[12px] w-36"
+                    value={plan.status}
+                    onChange={e => handleStatusChange(plan, e.target.value)}
+                  >
+                    {Object.entries(RETENTION_STATUS_LABELS).map(([value, { label }]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${statusInfo.style}`}>{statusInfo.label}</span>
+                  {scheduleEntries.map((entry, idx) => (
+                    <span key={idx} className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 text-[11px] font-bold rounded whitespace-nowrap">
+                      {entry.label}: {formatDate(entry.dueDate)}
+                    </span>
+                  ))}
+                  {plan.note && <span className="text-[11px] text-slate-400 dark:text-slate-500">{plan.note}</span>}
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setConfirmDeleteId(plan.id)}
+                    className="text-slate-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                    title="Sil"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => confirmDeleteId && handleDelete(confirmDeleteId)}
+        title="Planı Sil"
+        message="Bu retansiyon planını silmek istediğinize emin misiniz?"
       />
     </div>
   );

@@ -104,6 +104,7 @@ export interface OrthoMiniScrewRecord {
   id: string;
   caseId: string;
   treatmentItemId?: string | null;
+  treatmentItem?: OrthoTreatmentItem | null;
   region: string;
   placementDate: string;
   purpose?: string | null;
@@ -191,6 +192,25 @@ export const OrthodonticsService = {
     return response.data;
   },
 
+  async uploadRecord(
+    caseId: string,
+    file: File,
+    meta: { recordType: string; phase: string; name?: string; description?: string; takenAt?: string },
+  ): Promise<OrthoRecordSet> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('recordType', meta.recordType);
+    formData.append('phase', meta.phase);
+    if (meta.name) formData.append('name', meta.name);
+    if (meta.description) formData.append('description', meta.description);
+    if (meta.takenAt) formData.append('takenAt', meta.takenAt);
+
+    const response = await api.post<OrthoRecordSet>(`/orthodontics/cases/${caseId}/records/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
   async deleteRecord(recordId: string): Promise<void> {
     await api.delete(`/orthodontics/records/${recordId}`);
   },
@@ -245,13 +265,36 @@ export const OrthodonticsService = {
     return response.data;
   },
 
+  async updateMiniScrew(screwId: string, data: { status?: string; removalDate?: string; followUpDates?: string[]; note?: string }): Promise<OrthoMiniScrewRecord> {
+    const response = await api.patch<OrthoMiniScrewRecord>(`/orthodontics/mini-screws/${screwId}`, data);
+    return response.data;
+  },
+
   async addGrowthAssessment(caseId: string, data: Partial<OrthoGrowthAssessment>): Promise<OrthoGrowthAssessment> {
     const response = await api.post<OrthoGrowthAssessment>(`/orthodontics/cases/${caseId}/growth-assessments`, data);
     return response.data;
   },
 
+  async updateGrowthAssessment(assessmentId: string, data: Partial<OrthoGrowthAssessment>): Promise<OrthoGrowthAssessment> {
+    const response = await api.patch<OrthoGrowthAssessment>(`/orthodontics/growth-assessments/${assessmentId}`, data);
+    return response.data;
+  },
+
+  async deleteGrowthAssessment(assessmentId: string): Promise<void> {
+    await api.delete(`/orthodontics/growth-assessments/${assessmentId}`);
+  },
+
   async addRetentionPlan(caseId: string, data: Partial<OrthoRetentionPlan>): Promise<OrthoRetentionPlan> {
     const response = await api.post<OrthoRetentionPlan>(`/orthodontics/cases/${caseId}/retention-plans`, data);
     return response.data;
+  },
+
+  async updateRetentionPlan(planId: string, data: Partial<Pick<OrthoRetentionPlan, 'status' | 'deliveryDate' | 'followUpSchedule' | 'note'>>): Promise<OrthoRetentionPlan> {
+    const response = await api.patch<OrthoRetentionPlan>(`/orthodontics/retention-plans/${planId}`, data);
+    return response.data;
+  },
+
+  async deleteRetentionPlan(planId: string): Promise<void> {
+    await api.delete(`/orthodontics/retention-plans/${planId}`);
   },
 };
