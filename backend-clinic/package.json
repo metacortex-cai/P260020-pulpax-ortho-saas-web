@@ -15,6 +15,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "ts-node prisma/seed.ts",
+    "db:seed:ortho": "ts-node scripts/seed-ortho-tariffs.ts",
     "db:rls": "ts-node prisma/apply-rls.ts",
     "test": "jest",
     "test:cov": "jest --coverage",
