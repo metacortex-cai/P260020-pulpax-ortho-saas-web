@@ -1,0 +1,350 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { Plus, Calendar, AlertCircle, Search, X, Trash2, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Filter, Download, FileText, ChevronDown, Check } from 'lucide-react';
+import Modal from '../../../../components/ui/Modal';
+import ConfirmModal from '../../../../components/ui/ConfirmModal';
+import Dropdown from '../../../../components/ui/Dropdown';
+import { AppointmentService } from '../../../../lib/services/appointment.service';
+import Skeleton from '../../../../components/ui/Skeleton';
+import { Appointment } from '../../../../lib/types';
+import { format } from 'date-fns';
+import { tr } from 'date-fns/locale';
+
+function DropdownItem({ icon, label, active, onClick }: { icon?: React.ReactNode; label: string; active?: boolean; onClick?: () => void }) {
+  return (
+    <button onClick={onClick} className={`w-full flex items-center gap-2.5 px-4 py-2 text-[13px] font-medium transition-colors text-left ${active ? 'bg-metronic-primary/5 text-metronic-primary font-bold' : 'text-slate-700 hover:bg-slate-50 hover:text-metronic-primary'}`}>
+      {icon}{label}{active && <Check size={12} className="ml-auto text-metronic-primary" />}
+    </button>
+  );
+}
+
+const STATUS_MAP: Record<string, { label: string; cls: string }> = {
+  PLANNED:    { label: 'Planlandı',    cls: 'bg-amber-50 text-amber-600' },
+  CONFIRMED:  { label: 'Onaylandı',    cls: 'bg-metronic-success-light text-metronic-success' },
+  CHECKED_IN: { label: 'Geldi',        cls: 'bg-metronic-primary-light text-metronic-primary' },
+  COMPLETED:  { label: 'Tamamlandı',   cls: 'bg-slate-100 text-slate-500' },
+  NO_SHOW:    { label: 'Gelmedi',      cls: 'bg-metronic-danger-light text-metronic-danger' },
+  CANCELLED:  { label: 'İptal',        cls: 'bg-metronic-danger-light text-metronic-danger' },
+  POSTPONED:  { label: 'Ertelendi',    cls: 'bg-amber-50 text-amber-600' },
+};
+
+const PAGE_LIMIT_OPTIONS = [10, 25, 50, 100];
+
+function SortableHeader({ label, column, sortColumn, sortDirection, onSort }: { label: string; column: string; sortColumn: string | null; sortDirection: 'asc' | 'desc'; onSort: (col: string) => void; }) {
+  const isActive = sortColumn === column;
+  return (
+    <th
+      onClick={() => onSort(column)}
+      className="py-3 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-metronic-primary transition-colors select-none"
+    >
+      <div className="flex items-center gap-1.5">
+        {label}
+        {isActive && (sortDirection === 'asc' ? <ArrowUp size={12} className="text-metronic-primary" /> : <ArrowDown size={12} className="text-metronic-primary" />)}
+      </div>
+    </th>
+  );
+}
+
+export default function AppointmentsTab({ patient }: { patient: any }) {
+  const [modal, setModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+
+  // Arama, filtre, sıralama, sayfalama
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageLimit, setPageLimit] = useState(10);
+
+  useEffect(() => {
+    async function fetchAppointments() {
+      try {
+        setLoading(true);
+        // Gerçek API entegrasyonu:
+        // const data = await AppointmentService.findByPatient(patient.id);
+        // setAppointments(data);
+
+        // Mock simülasyonu
+        setTimeout(() => {
+          setAppointments([
+            { id: '1', startOn: '2026-05-08T09:00:00', doctorId: 'Dr. Ayşe Kaya', status: 'PLANNED', patientId: patient.id, endOn: '', createdAt: '', updatedAt: '' },
+            { id: '2', startOn: '2026-05-01T14:30:00', doctorId: 'Dr. Ayşe Kaya', status: 'COMPLETED', patientId: patient.id, endOn: '', createdAt: '', updatedAt: '' },
+          ] as any);
+          setLoading(false);
+        }, 600);
+      } catch (err) {
+        console.error('Failed to fetch appointments:', err);
+        setLoading(false);
+      }
+    }
+
+    if (patient?.id) {
+      fetchAppointments();
+    }
+  }, [patient?.id]);
+
+  const exportCSV = () => {
+    const rows = [
+      ['Tarih & Saat', 'Hekim', 'Durum'],
+      ...sortedAppointments.map(a => [
+        format(new Date(a.startOn), 'dd.MM.yyyy HH:mm', { locale: tr }),
+        a.doctorId,
+        STATUS_MAP[a.status]?.label || a.status,
+      ]),
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'randevular.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Arama + filtre
+  const filtered = appointments.filter(a => {
+    const statusLabel = STATUS_MAP[a.status]?.label || a.status;
+    const matchSearch = [a.doctorId, statusLabel, a.startOn]
+      .join(' ').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatus = !filterStatus || a.status === filterStatus;
+    return matchSearch && matchStatus;
+  });
+
+  // Sıralama
+  const sortedAppointments = [...filtered].sort((a, b) => {
+    if (!sortColumn) return 0;
+    const aVal = sortColumn === 'status' ? (STATUS_MAP[a.status]?.label || a.status) : (a as any)[sortColumn] ?? '';
+    const bVal = sortColumn === 'status' ? (STATUS_MAP[b.status]?.label || b.status) : (b as any)[sortColumn] ?? '';
+    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1);
+  };
+
+  // Arama/filtre/sayfa boyutu değiştiğinde sayfayı sıfırla (render sırasında, efekt olmadan —
+  // böylece bir önceki filtrenin sayfası için hesaplanmış "paginated" hiç ekrana yansımaz).
+  const filterKey = `${searchTerm}|${filterStatus}|${pageLimit}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setCurrentPage(1);
+  }
+
+  // Sayfalama
+  const totalPages = Math.max(1, Math.ceil(sortedAppointments.length / pageLimit));
+  const paginated = sortedAppointments.slice((currentPage - 1) * pageLimit, currentPage * pageLimit);
+
+  const allSelected = paginated.length > 0 && paginated.every(a => selectedIds.includes(a.id));
+  const toggleSelectAll = () => {
+    setSelectedIds(allSelected ? [] : paginated.map(a => a.id));
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleBulkDelete = () => {
+    setAppointments(prev => prev.filter(a => !selectedIds.includes(a.id)));
+    setSelectedIds([]);
+    setBulkDeleteConfirmOpen(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Toplu İşlem Çubuğu */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between p-4 bg-metronic-primary-light/30 border border-metronic-primary/20 rounded-xl animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <span className="text-[13px] font-bold text-metronic-primary">{selectedIds.length} randevu seçildi</span>
+            <div className="h-4 w-px bg-metronic-primary/20" />
+
+            <button
+              onClick={() => setBulkDeleteConfirmOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-metronic-danger text-white text-[12px] font-bold rounded-lg hover:opacity-90 transition-all shadow-sm"
+            >
+              <Trash2 size={14} /> Seçilenleri Sil
+            </button>
+          </div>
+
+          <button onClick={() => setSelectedIds([])} className="text-[12px] font-bold text-slate-400 hover:text-slate-600">Seçimi Temizle</button>
+        </div>
+      )}
+
+      <div className="m-card shadow-none border border-slate-200/60 mb-0 overflow-hidden">
+        <style>{`@keyframes fadeInDown { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }`}</style>
+        <div className="flex flex-col md:flex-row md:items-center justify-between px-6 py-5 border-b border-slate-200/60 gap-4">
+          <div className="flex items-center gap-3">
+            <h4 className="text-[1.05rem] font-bold text-slate-800 tracking-tight m-0">Randevular</h4>
+            <span className="px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-md border border-slate-200">{filtered.length} Kayıt</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[200px]">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input type="text" placeholder="Hekim veya durum ara..."
+                value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-8 h-9 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-metronic-primary focus:ring-2 focus:ring-metronic-primary/20 transition-all text-[13px] font-medium text-slate-700 placeholder-slate-400" />
+              {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={14} /></button>}
+            </div>
+            <Dropdown align="right" trigger={
+              <button className={`flex items-center gap-1.5 h-9 px-3 border rounded-lg text-[13px] font-medium shadow-sm transition-colors ${filterStatus ? 'bg-metronic-primary/5 border-metronic-primary/30 text-metronic-primary' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                <Filter size={15} /> Filtrele {filterStatus && <span className="w-1.5 h-1.5 rounded-full bg-metronic-primary" />} <ChevronDown size={13} className="text-slate-400" />
+              </button>
+            }>
+              <div className="px-4 py-2 border-b border-slate-100"><p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Durum</p></div>
+              <DropdownItem label="Tümü" active={!filterStatus} onClick={() => setFilterStatus('')} />
+              {Object.entries(STATUS_MAP).map(([k, v]) => (
+                <DropdownItem key={k} label={v.label} active={filterStatus === k} onClick={() => setFilterStatus(filterStatus === k ? '' : k)} />
+              ))}
+              {filterStatus && <div className="border-t border-slate-100 mt-1 px-3 py-2"><button onClick={() => setFilterStatus('')} className="w-full text-center text-[12px] font-bold text-rose-500">Filtreyi Temizle</button></div>}
+            </Dropdown>
+            <Dropdown align="right" trigger={
+              <button className="flex items-center gap-1.5 h-9 px-3 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 text-[13px] font-medium shadow-sm">
+                <Download size={15} /> Dışa Aktar <ChevronDown size={13} className="text-slate-400" />
+              </button>
+            }>
+              <div className="px-4 py-2 border-b border-slate-100"><p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Format Seçin</p></div>
+              <DropdownItem icon={<FileText size={14} className="text-red-500" />} label="CSV (.csv)" onClick={exportCSV} />
+            </Dropdown>
+            <button onClick={() => setModal(true)}
+              className="flex items-center gap-1.5 h-9 px-3 bg-metronic-primary text-white rounded-lg text-[13px] font-bold hover:bg-blue-600 transition-colors whitespace-nowrap">
+              <Plus size={14} /> Randevu Ekle
+            </button>
+          </div>
+        </div>
+        <div className="overflow-auto max-h-[420px] relative">
+          <table className="w-full text-left border-collapse min-w-[700px]">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="py-3 px-6 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-slate-300 text-metronic-primary focus:ring-metronic-primary/30 cursor-pointer"
+                  />
+                </th>
+                <SortableHeader label="Tarih & Saat" column="startOn" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Hekim" column="doctorId" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Durum" column="status" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                [...Array(3)].map((_, i) => (
+                  <tr key={i}>
+                    <td className="py-4 px-6"><Skeleton className="w-4 h-4" /></td>
+                    <td className="py-4 px-6"><Skeleton className="w-32 h-4" /></td>
+                    <td className="py-4 px-6"><Skeleton className="w-24 h-4" /></td>
+                    <td className="py-4 px-6"><Skeleton className="w-20 h-6" /></td>
+                  </tr>
+                ))
+              ) : appointments.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center gap-2">
+                      <AlertCircle size={24} className="text-slate-300" />
+                      <span className="text-[13px] font-medium">Randevu bulunamadı.</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : paginated.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-12 text-center text-slate-400 text-[13px]">Eşleşen kayıt bulunamadı.</td>
+                </tr>
+              ) : (
+                paginated.map(a => {
+                  const isSelected = selectedIds.includes(a.id);
+                  return (
+                    <tr key={a.id} className={`hover:bg-slate-50 transition-colors ${isSelected ? 'bg-metronic-primary-light/10' : ''}`}>
+                      <td className="py-3 px-6">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(a.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-metronic-primary focus:ring-metronic-primary/30 cursor-pointer"
+                        />
+                      </td>
+                      <td className="py-3 px-6 text-[13px] font-semibold text-slate-700">
+                        <div className="flex items-center gap-2">
+                          <Calendar size={14} className="text-slate-400" />
+                          {format(new Date(a.startOn), 'dd MMMM yyyy HH:mm', { locale: tr })}
+                        </div>
+                      </td>
+                      <td className="py-3 px-6 text-[13px] text-slate-600">{a.doctorId}</td>
+                      <td className="py-3 px-6">
+                        <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold ${STATUS_MAP[a.status]?.cls || 'bg-slate-100 text-slate-600'}`}>
+                          {STATUS_MAP[a.status]?.label || a.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Sayfalama */}
+        {!loading && (
+          <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-slate-200/60 gap-4">
+            <div className="flex items-center gap-3">
+              <select value={pageLimit} onChange={e => { setPageLimit(Number(e.target.value)); setCurrentPage(1); }}
+                className="h-7 px-2 bg-slate-50 border border-slate-200 rounded-md text-[12px] font-bold text-slate-600 outline-none cursor-pointer w-20">
+                {PAGE_LIMIT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+              <span className="text-slate-400 text-[12px] font-medium">sayfa</span>
+              <div className="w-px h-4 bg-slate-200" />
+              <span className="text-slate-500 text-[13px] font-medium">
+                Toplam <span className="font-bold text-slate-700">{sortedAppointments.length}</span> kayıttan{' '}
+                <span className="font-bold text-slate-700">{sortedAppointments.length === 0 ? 0 : Math.min((currentPage - 1) * pageLimit + 1, sortedAppointments.length)}–{Math.min(currentPage * pageLimit, sortedAppointments.length)}</span> arası
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-bold">«</button>
+              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronLeft size={16} /></button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const page = totalPages <= 5 ? i + 1 : currentPage <= 3 ? i + 1 : currentPage >= totalPages - 2 ? totalPages - 4 + i : currentPage - 2 + i;
+                return <button key={page} onClick={() => setCurrentPage(page)} className={`w-8 h-8 flex items-center justify-center rounded-md text-[13px] font-bold transition-colors ${page === currentPage ? 'bg-metronic-primary text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}>{page}</button>;
+              })}
+              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronRight size={16} /></button>
+              <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-bold">»</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Randevu Ekle Modalı (Mevcut yapı korundu) */}
+      <Modal isOpen={modal} onClose={() => setModal(false)} title="Yeni Randevu" size="md"
+        footer={<><button onClick={() => setModal(false)} className="px-4 py-2 text-[13px] font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">İptal</button><button className="px-5 py-2 text-[13px] font-bold bg-metronic-primary text-white rounded-lg hover:bg-blue-600">Kaydet</button></>}>
+        <div className="space-y-4">
+          <div className="flex flex-col gap-1.5"><label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Hasta</label><input className="m-input" value={`${patient.firstName} ${patient.lastName}`} readOnly /></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5"><label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tarih & Saat</label><input type="datetime-local" className="m-input" /></div>
+            <div className="flex flex-col gap-1.5"><label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Hekim</label><select className="m-input"><option>Dr. Ayşe Kaya</option><option>Dr. Mehmet Yıldız</option></select></div>
+          </div>
+          <div className="flex flex-col gap-1.5"><label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Açıklama</label><input className="m-input" placeholder="Tedavi / açıklama..." /></div>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        isOpen={bulkDeleteConfirmOpen}
+        onClose={() => setBulkDeleteConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title="Randevuları Sil"
+        message={`${selectedIds.length} randevuyu silmek istediğinize emin misiniz?`}
+      />
+    </div>
+  );
+}

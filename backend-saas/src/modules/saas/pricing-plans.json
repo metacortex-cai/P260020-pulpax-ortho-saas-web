@@ -1,0 +1,48 @@
+[
+  {
+    "id": "starter",
+    "name": "Starter (Solo Hekim)",
+    "price": 390,
+    "yearlyPrice": 290,
+    "maxDentists": 1,
+    "features": [
+      "1 Hekim Desteği",
+      "Sınırsız Sekreter/Personel",
+      "Temel Diş Şeması",
+      "Randevu Takvimi",
+      "Gelir-Gider Takibi",
+      "E-posta ile Destek"
+    ],
+    "popular": false
+  },
+  {
+    "id": "professional",
+    "name": "Professional (Klinik)",
+    "price": 350,
+    "yearlyPrice": 260,
+    "maxDentists": 5,
+    "features": [
+      "2-5 Hekim Desteği",
+      "Geliştirilmiş Stok/Depo Kontrolü",
+      "Personel Prim/Komisyon Sistemi",
+      "Laboratuvar Takip Modülü",
+      "Öncelikli Destek"
+    ],
+    "popular": true
+  },
+  {
+    "id": "enterprise",
+    "name": "Zincir / Enterprise",
+    "price": "Teklif Alın",
+    "yearlyPrice": "Teklif Alın",
+    "maxDentists": 999,
+    "features": [
+      "5+ Hekim Desteği",
+      "Çoklu Şube Yönetimi",
+      "Custom API Erişimi",
+      "Özel SLA ve Destek Hattı",
+      "Kişiselleştirilmiş Eğitim"
+    ],
+    "popular": false
+  }
+]

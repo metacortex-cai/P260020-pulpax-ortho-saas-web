@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pulpax Integrations QA"
+  short_description: "Queues, integrations, and tests"
+  default_prompt: "Use this skill for Pulpax integrations, outbox, BullMQ workers, reminders, SMS/email, Parasut, TCMB, medication sync, security checks, and regression planning."

@@ -1,0 +1,35 @@
+{
+  "cookies": [
+    {
+      "name": "access_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4OWQyODJhMC1mM2Q1LTRiMTAtYTRiMC02NTdmZGMzMjRjMWEiLCJlbWFpbCI6ImRvY3RvckBwdWxwYXgudGVzdCIsInJvbGUiOiJET0NUT1IiLCJ0ZW5hbnRJZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsImlhdCI6MTc4MjE2MzE2NywiZXhwIjoxNzgyMTkxOTY3fQ.lzKi-0ycUbd_Ieu-YSPcjWqeUHBplzYz_tjc7_Sqhfc",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1782191967,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "refresh_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4OWQyODJhMC1mM2Q1LTRiMTAtYTRiMC02NTdmZGMzMjRjMWEiLCJlbWFpbCI6ImRvY3RvckBwdWxwYXgudGVzdCIsInJvbGUiOiJET0NUT1IiLCJ0ZW5hbnRJZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsImlhdCI6MTc4MjE2MzE2NywiZXhwIjoxNzg0NzU1MTY3fQ.RkUXN09DrP-Hq03Pi1WNDGJxiFVkGMuAXyQc6gFbx1o",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1784755167,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://localhost:7001",
+      "localStorage": [
+        {
+          "name": "pulpax-auth-storage",
+          "value": "{\"state\":{\"tenantId\":\"00000000-0000-0000-0000-000000000001\",\"user\":{\"id\":\"89d282a0-f3d5-4b10-a4b0-657fdc324c1a\",\"firstName\":\"Ahmet\",\"lastName\":\"Yılmaz\",\"email\":\"doctor@pulpax.test\",\"role\":\"DOCTOR\",\"clinicId\":\"00000000-0000-0000-0000-000000000001\"},\"clinics\":[{\"id\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"Pulpax Klinik A\",\"status\":\"ACTIVE\",\"plan\":\"ENTERPRISE\",\"role\":\"DOCTOR\",\"isActive\":true}],\"isLoading\":false},\"version\":0}"
+        }
+      ]
+    }
+  ]
+}

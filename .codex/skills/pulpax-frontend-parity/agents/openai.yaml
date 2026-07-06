@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pulpax Frontend Parity"
+  short_description: "Clinic and SaaS UI parity"
+  default_prompt: "Use this skill for Pulpax frontend work in Next.js, TypeScript, Tailwind, dental chart, patient workflows, forms, dashboards, and parity checks."

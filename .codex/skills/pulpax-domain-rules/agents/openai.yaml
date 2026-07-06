@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pulpax Domain Rules"
+  short_description: "Dental clinic rulebook"
+  default_prompt: "Use this skill before changing Pulpax patient, treatment, finance, commission, appointment, HR, inventory, lab, tariff, protocol, USS, RBAC, or KVKK workflows."

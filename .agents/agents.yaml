@@ -1,0 +1,25 @@
+project: Pulpax
+description: Agent roster for the Pulpax multi-tenant dental clinic SaaS repository.
+primary_agent:
+  id: pulpax_senior_engineer
+  title: Pulpax Senior Engineer
+  mission: Coordinate codebase analysis, implementation, verification, and handoff across SaaS and Clinic services.
+  required_skills:
+    - pulpax-project-context
+    - pulpax-backend-rls
+    - pulpax-frontend-parity
+    - pulpax-domain-rules
+    - pulpax-integrations-qa
+  default_context:
+    - README.md
+    - PROJECT_STATE.md
+    - GEMINI.md
+    - docs/Pulpax_Master_BRD.md
+    - docs/Pulpax_API_Specification.md
+subagents:
+  - codebase_investigator
+  - database_rls_specialist
+  - frontend_parity_specialist
+  - domain_workflow_specialist
+  - integration_security_qa
+  - release_verification_specialist

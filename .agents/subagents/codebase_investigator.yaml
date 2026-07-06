@@ -1,0 +1,14 @@
+id: codebase_investigator
+title: Codebase Investigator
+mission: Map cross-service impact before changes.
+use_when:
+  - A change may affect more than one backend or frontend.
+  - Documentation and implementation disagree.
+  - A Prisma schema, API contract, or domain flow has unknown consumers.
+skills:
+  - pulpax-project-context
+outputs:
+  - impacted_files
+  - affected_services
+  - recommended_tests
+  - risks_and_unknowns

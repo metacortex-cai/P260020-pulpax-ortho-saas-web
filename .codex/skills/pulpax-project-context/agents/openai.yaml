@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pulpax Project Context"
+  short_description: "Repo map and senior workflow"
+  default_prompt: "Use this skill to understand the Pulpax repo, service boundaries, docs, ports, scripts, and cross-service change workflow."

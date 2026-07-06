@@ -1,0 +1,456 @@
+// This is your Prisma schema file for tenant isolated databases.
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../src/prisma/tenant-client" // Local output path to prevent ESM/CJS loader issues in Node 24
+  binaryTargets = ["native", "windows"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("TENANT_DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------
+// 1. PATIENTS & APPOINTMENTS
+// ----------------------------------------------------------------------
+
+model Patient {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  firstName  String  @map("first_name")
+  lastName   String  @map("last_name")
+  nationalId String? @map("national_id")
+  phone      String
+
+  // Balances
+  totalDebt Decimal @default(0.00) @map("total_debt")
+  advance   Decimal @default(0.00) @map("advance")
+
+  // Optimistic Locking
+  version Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  appointments   Appointment[]
+  treatmentPlans TreatmentPlan[]
+  payments       Payment[]
+  consentLogs    ConsentLog[]
+  implantRecords ImplantRecord[]
+
+  @@map("patients")
+}
+
+model ImplantRecord {
+  id               String    @id @default(uuid())
+  patientId        String    @map("patient_id")
+  patient          Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  toothNo          String    @map("tooth_no")
+  brand            String
+  implantDate      DateTime  @map("implant_date")
+  implantLotNo     String    @map("implant_lot_no")
+  implantSerialNo  String    @map("implant_serial_no")
+  
+  abutmentDate     DateTime? @map("abutment_date")
+  abutmentLotNo    String?   @map("abutment_lot_no")
+  abutmentSerialNo String?   @map("abutment_serial_no")
+  
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([patientId])
+  @@map("implant_records")
+}
+
+model Appointment {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  patientId String  @map("patient_id")
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  doctorId String @map("doctor_id")
+
+  chairId     String?      @map("chair_id")
+  dentalChair DentalChair? @relation(fields: [chairId], references: [id], onDelete: SetNull)
+
+  status  String   @default("PLANNED")
+  startOn DateTime @map("start_on")
+  endOn   DateTime @map("end_on")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([clinicId, startOn, endOn])
+  @@map("appointments")
+}
+
+model DentalChair {
+  id        String   @id @default(uuid())
+  clinicId  String   @map("clinic_id")
+  name      String
+  color     String?  // Renk kodu veya CSS rengi
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointments Appointment[]
+
+  @@unique([clinicId, name])
+  @@map("dental_chairs")
+}
+
+// ----------------------------------------------------------------------
+// 2. TREATMENTS & FINANCES
+// ----------------------------------------------------------------------
+
+model MasterTreatment {
+  id      String  @id @default(uuid())
+  name    String
+  sutCode String? @map("sut_code")
+
+  // Relationships
+  tariffs Tariff[]
+
+  @@map("master_treatments")
+}
+
+model Tariff {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  masterTreatmentId String          @map("master_treatment_id")
+  masterTreatment   MasterTreatment @relation(fields: [masterTreatmentId], references: [id])
+
+  price   Decimal
+  taxRate Decimal @map("tax_rate")
+
+  // Relationships
+  treatmentItems TreatmentItem[]
+
+  @@map("tariffs")
+}
+
+model TreatmentPlan {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  patientId String  @map("patient_id")
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  status     String  @default("DRAFT")
+  totalPrice Decimal @default(0.00) @map("total_price")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  items TreatmentItem[]
+
+  @@map("treatment_plans")
+}
+
+model TreatmentItem {
+  id     String        @id @default(uuid())
+  planId String        @map("plan_id")
+  plan   TreatmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  tariffId String @map("tariff_id")
+  tariff   Tariff @relation(fields: [tariffId], references: [id])
+
+  doctorId String @map("doctor_id")
+
+  status  String  @default("PENDING")
+  toothNo Int?    @map("tooth_no")
+  price   Decimal
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  paymentDistributions PaymentDistribution[]
+  protocol             Protocol?
+  labOrders            LabOrder[]
+  primRecords          PrimRecord[]
+
+  @@map("treatment_items")
+}
+
+// ----------------------------------------------------------------------
+// 3. PAYMENTS & PROTOCOLS
+// ----------------------------------------------------------------------
+
+model Payment {
+  id        String  @id @default(uuid())
+  patientId String  @map("patient_id")
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  amount    Decimal
+  method    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relationships
+  distributions PaymentDistribution[]
+
+  @@map("payments")
+}
+
+model PaymentDistribution {
+  id        String  @id @default(uuid())
+  paymentId String  @map("payment_id")
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  treatmentItemId String        @map("treatment_item_id")
+  treatmentItem   TreatmentItem @relation(fields: [treatmentItemId], references: [id], onDelete: Cascade)
+
+  amount    Decimal
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("payment_distributions")
+}
+
+model Protocol {
+  id              String        @id @default(uuid())
+  treatmentItemId String        @unique @map("treatment_item_id")
+  treatmentItem   TreatmentItem @relation(fields: [treatmentItemId], references: [id], onDelete: Cascade)
+
+  protocolNo String @unique @map("protocol_no")
+  ussStatus  String @default("PENDING") @map("uss_status")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("protocols")
+}
+
+// ----------------------------------------------------------------------
+// 4. LAB & HR
+// ----------------------------------------------------------------------
+
+model LabOrder {
+  id              String        @id @default(uuid())
+  treatmentItemId String        @map("treatment_item_id")
+  treatmentItem   TreatmentItem @relation(fields: [treatmentItemId], references: [id], onDelete: Cascade)
+
+  status String  @default("PENDING")
+  cost   Decimal @default(0.00)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("lab_orders")
+}
+
+model EmployeeLeave {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  employeeId String @map("employee_id")
+
+  startAt DateTime @map("start_at")
+  endAt   DateTime @map("end_at")
+  type    String
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("employee_leaves")
+}
+
+model EmployeeWorkHour {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  employeeId String @map("employee_id")
+
+  dayOfWeek Int     @map("day_of_week")
+  isWorking Boolean @default(true) @map("is_working")
+  startTime String? @map("start_time")
+  endTime   String? @map("end_time")
+
+  @@unique([clinicId, employeeId, dayOfWeek])
+  @@map("employee_work_hours")
+}
+
+// ----------------------------------------------------------------------
+// 5. SECURITY, KVKK & AUDIT
+// ----------------------------------------------------------------------
+
+model ConsentLog {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  patientId String  @map("patient_id")
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  consentType String  @map("consent_type")
+  isGranted   Boolean @map("is_granted")
+  ipAddress   String? @map("ip_address")
+  userAgent   String? @map("user_agent")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("consent_logs")
+}
+
+model AuditLog {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  userId String? @map("user_id")
+
+  action   String
+  entity   String
+  entityId String @map("entity_id")
+
+  details String?
+
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([clinicId, entity, entityId])
+  @@map("audit_logs")
+}
+
+// ----------------------------------------------------------------------
+// 6. SAAS CLINIC LEVEL INVOICING
+// ----------------------------------------------------------------------
+
+model SmsPurchase {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  amount Int
+  price  Decimal
+  status String  @default("COMPLETED")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("sms_purchases")
+}
+
+model ClinicInvoice {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  invoiceNo String  @unique @map("invoice_no")
+  amount    Decimal
+  status    String  @default("UNPAID")
+  type      String
+
+  dueDate   DateTime  @map("due_date")
+  paidAt    DateTime? @map("paid_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("clinic_invoices")
+}
+
+// ----------------------------------------------------------------------
+// 7. EMPLOYEE CONTRACTS & PRIM RECORDS
+// ----------------------------------------------------------------------
+
+model EmployeeContract {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  employeeId String @map("employee_id")
+
+  version    Int       @default(1)
+  type       String
+  rate       Decimal   @default(0.00)
+  conditions String?
+  validFrom  DateTime  @map("valid_from")
+  validUntil DateTime? @map("valid_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  primRecords PrimRecord[]
+
+  @@map("employee_contracts")
+}
+
+model PrimRecord {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  employeeId String @map("employee_id")
+
+  treatmentItemId String        @map("treatment_item_id")
+  treatmentItem   TreatmentItem @relation(fields: [treatmentItemId], references: [id])
+
+  contractId String           @map("contract_id")
+  contract   EmployeeContract @relation(fields: [contractId], references: [id])
+
+  amount         Decimal
+  calculatedAt   DateTime @default(now()) @map("calculated_at")
+  idempotencyKey String   @unique @map("idempotency_key")
+
+  @@map("prim_records")
+}
+
+// ----------------------------------------------------------------------
+// 8. INTEGRATIONS & NOTIFICATIONS
+// ----------------------------------------------------------------------
+
+model Medication {
+  id                String    @id @default(uuid())
+  barcode           String    @unique
+  name              String
+  activeSubstance   String?   @map("active_substance")
+  manufacturer      String?
+  prescriptionType  String?   @map("prescription_type")
+  sgkCovered        Boolean   @default(false) @map("sgk_covered")
+  lastSyncedAt      DateTime  @default(now()) @map("last_synced_at")
+
+  @@index([name])
+  @@index([activeSubstance])
+  @@map("medications")
+}
+
+model ClinicIntegration {
+  id                String    @id @default(uuid())
+  clinicId          String    @map("clinic_id") 
+  integrationType   String    @default("parasut") @map("integration_type")
+  companyId         String?   @map("company_id")
+  accessTokenEnc    String?   @map("access_token_enc")
+  refreshTokenEnc   String?   @map("refresh_token_enc")
+  tokenExpiresAt    DateTime? @map("token_expires_at")
+  status            String    @default("active") 
+  connectedAt       DateTime  @default(now()) @map("connected_at")
+  lastRefreshAt     DateTime? @map("last_refresh_at")
+
+  @@unique([clinicId, integrationType])
+  @@map("clinic_integrations")
+}
+
+model ParasutSyncLog {
+  id                String    @id @default(uuid())
+  clinicId          String    @map("clinic_id")
+  entityType        String    @map("entity_type") 
+  entityId          String    @map("entity_id")
+  parasutEntityId   String?   @map("parasut_entity_id")
+  operation         String    @map("operation") 
+  status            String    @map("status") 
+  errorMessage      String?   @map("error_message")
+  requestPayload    Json?     @map("request_payload")
+  responsePayload   Json?     @map("response_payload")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@map("parasut_sync_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  clinicId  String   @map("clinic_id")
+  userId    String?  @map("user_id")
+  type      String
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([clinicId])
+  @@index([userId])
+  @@map("notifications")
+}

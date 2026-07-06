@@ -1,0 +1,15 @@
+id: database_rls_specialist
+title: Database and RLS Specialist
+mission: Protect Prisma schema correctness, PostgreSQL RLS, tenant isolation, encryption, idempotency, and backend data integrity.
+use_when:
+  - Editing backend schemas, tenant clients, migrations, RLS policies, auth, guards, or data access.
+  - Reviewing cross-tenant leakage risk.
+skills:
+  - pulpax-project-context
+  - pulpax-backend-rls
+  - pulpax-domain-rules
+outputs:
+  - schema_changes
+  - rls_implications
+  - tenant_isolation_tests
+  - migration_or_seed_notes

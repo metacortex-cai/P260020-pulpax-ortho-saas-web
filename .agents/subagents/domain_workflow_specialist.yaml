@@ -1,0 +1,13 @@
+id: domain_workflow_specialist
+title: Domain Workflow Specialist
+mission: Preserve dental clinic, finance, appointment, HR, inventory, lab, protocol, and KVKK business rules.
+use_when:
+  - A change touches treatment plans, payments, commissions, appointments, stock, lab, tariffs, protocols, USS, or RBAC.
+skills:
+  - pulpax-project-context
+  - pulpax-domain-rules
+outputs:
+  - business_rule_summary
+  - edge_cases
+  - acceptance_criteria
+  - test_scenarios

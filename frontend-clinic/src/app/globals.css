@@ -1,0 +1,284 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Smooth theme transition */
+  html {
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  body {
+    /* Tailwind @apply hatasını önlemek için theme() fonksiyonu kullanımı */
+    background-color: theme('colors.metronic.body');
+    color: theme('colors.metronic.gray.700');
+    @apply antialiased;
+    font-family: 'Poppins', 'Inter', system-ui, sans-serif;
+  }
+
+  /* Dark mode body */
+  .dark body {
+    background-color: #0f1117;
+    color: #c5c7d0;
+  }
+}
+
+@layer components {
+  /* =========================================
+     METRONIC V7 COMPONENT YAPI TAŞLARI
+     ========================================= */
+
+  /* 1. KARTLAR (Cards) */
+  .m-card {
+    @apply bg-white rounded-xl border-0 mb-8 flex flex-col;
+    box-shadow: theme('boxShadow.card');
+  }
+  .dark .m-card {
+    @apply bg-[#1c1f2e] border border-white/5;
+    box-shadow: 0px 0px 30px 0px rgba(0, 0, 0, 0.2);
+  }
+  
+  .m-card-header {
+    @apply flex justify-between items-stretch border-b min-h-[70px] px-8 bg-transparent;
+    border-color: theme('colors.metronic.gray.200');
+  }
+  .dark .m-card-header {
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .m-card-title {
+    @apply flex items-center m-0 text-[1.15rem] font-medium;
+    color: theme('colors.metronic.dark');
+  }
+  .dark .m-card-title {
+    color: #e0e2e8;
+  }
+
+  .m-card-toolbar {
+    @apply flex items-center;
+  }
+
+  .m-card-body {
+    @apply flex flex-col p-8;
+  }
+
+  /* 2. BUTONLAR (Buttons) */
+  .m-btn {
+    @apply inline-flex items-center justify-center font-medium transition-colors px-4 py-2 rounded-lg text-sm outline-none gap-2 cursor-pointer;
+  }
+  
+  .m-btn-primary {
+    background-color: theme('colors.metronic.primary');
+    @apply text-white hover:bg-blue-600;
+  }
+
+  /* Metronic'in meşhur Light Butonları */
+  .m-btn-light-primary {
+    background-color: theme('colors.metronic.primary-light');
+    color: theme('colors.metronic.primary');
+  }
+  .m-btn-light-primary:hover {
+    background-color: theme('colors.metronic.primary');
+    @apply text-white;
+  }
+  .dark .m-btn-light-primary {
+    background-color: rgba(54, 153, 255, 0.12);
+    color: #5eaaff;
+  }
+  .dark .m-btn-light-primary:hover {
+    background-color: theme('colors.metronic.primary');
+    @apply text-white;
+  }
+  
+  .m-btn-light-success {
+    background-color: theme('colors.metronic.success-light');
+    color: theme('colors.metronic.success');
+  }
+  .m-btn-light-success:hover {
+    background-color: theme('colors.metronic.success');
+    @apply text-white;
+  }
+  .dark .m-btn-light-success {
+    background-color: rgba(27, 197, 189, 0.12);
+    color: #3fd8d2;
+  }
+
+  .m-btn-light-danger {
+    background-color: theme('colors.metronic.danger-light');
+    color: theme('colors.metronic.danger');
+  }
+  .m-btn-light-danger:hover {
+    background-color: theme('colors.metronic.danger');
+    @apply text-white;
+  }
+  .dark .m-btn-light-danger {
+    background-color: rgba(246, 78, 96, 0.12);
+    color: #f87d8d;
+  }
+
+  /* 3. SEMBOLLER (Avatarlar ve İkon Kutuları) */
+  .m-symbol {
+    @apply inline-flex items-center justify-center rounded-lg w-10 h-10;
+    background-color: theme('colors.metronic.gray.100');
+  }
+  .dark .m-symbol {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .m-symbol-label {
+    @apply font-medium;
+    color: theme('colors.metronic.gray.600');
+  }
+  .dark .m-symbol-label {
+    color: #9ea2b0;
+  }
+  
+  .m-symbol-light-primary {
+    background-color: theme('colors.metronic.primary-light');
+    color: theme('colors.metronic.primary');
+  }
+  .dark .m-symbol-light-primary {
+    background-color: rgba(54, 153, 255, 0.12);
+    color: #5eaaff;
+  }
+
+  /* Inputs */
+  .m-input {
+    @apply w-full px-4 py-2.5 border-0 rounded-lg outline-none transition-all font-medium;
+    background-color: theme('colors.metronic.gray.100');
+    color: theme('colors.metronic.gray.700');
+  }
+  .m-input:focus {
+    @apply bg-white border;
+    border-color: theme('colors.metronic.primary');
+  }
+  .dark .m-input {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #c5c7d0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .dark .m-input:focus {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: theme('colors.metronic.primary');
+  }
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #E4E6EF; /* metronic-gray-300 */
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B5B5C3; /* metronic-gray-500 */
+}
+
+/* Dark Scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+
+/* =========================================
+   GLOBAL DARK MODE OVERRIDES
+   Tab sayfaları ve diğer tüm sayfalar için
+   otomatik koyu mod metin/border uyarlamaları
+   ========================================= */
+
+/* Genel metin renkleri */
+.dark .text-slate-800 { color: #e2e4e9; }
+.dark .text-slate-700 { color: #c5c7d0; }
+.dark .text-slate-600 { color: #9ea2b0; }
+
+/* =========================================
+   GLOBAL CAPITALIZATION
+   Apply Title Case (capitalize first letter of each word)
+   across typical text elements, but exclude form inputs
+   and code/pre blocks to avoid altering user-entered data.
+   Use `.no-capitalize` to opt-out on specific elements.
+   ========================================= */
+@layer base {
+  body, p, span, a, li, label, button, h1, h2, h3, h4, h5, h6, td, th, caption {
+    text-transform: capitalize;
+  }
+
+  /* Exclude user input and code blocks */
+  input, textarea, select, option, pre, code, kbd, samp, .font-mono, .no-capitalize {
+    text-transform: none !important;
+  }
+}
+.dark .text-slate-500 { color: #7c818f; }
+.dark .text-metronic-dark { color: #e2e4e9; }
+.dark .text-metronic-gray-700 { color: #c5c7d0; }
+.dark .text-metronic-gray-600 { color: #9ea2b0; }
+.dark .text-metronic-gray-500 { color: #7c818f; }
+
+/* Border renkleri */
+.dark .border-slate-100 { border-color: rgba(255, 255, 255, 0.05); }
+.dark .border-slate-200 { border-color: rgba(255, 255, 255, 0.08); }
+.dark .border-slate-200\/60 { border-color: rgba(255, 255, 255, 0.05); }
+.dark .border-slate-200\/70 { border-color: rgba(255, 255, 255, 0.05); }
+.dark .border-slate-200\/80 { border-color: rgba(255, 255, 255, 0.05); }
+.dark .border-slate-300 { border-color: rgba(255, 255, 255, 0.1); }
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.05); }
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.08); }
+
+/* Arka plan renkleri */
+.dark .bg-slate-50 { background-color: rgba(255, 255, 255, 0.03); }
+.dark .bg-slate-100 { background-color: rgba(255, 255, 255, 0.05); }
+.dark .bg-white { background-color: #1c1f2e; }
+
+/* Hover arka plan */
+.dark .hover\:bg-slate-50:hover { background-color: rgba(255, 255, 255, 0.05); }
+.dark .hover\:bg-slate-100:hover { background-color: rgba(255, 255, 255, 0.08); }
+
+/* Label ve form elemanları */
+.dark label { color: #9ea2b0; }
+.dark select,
+.dark option { background-color: #1c1f2e; color: #c5c7d0; }
+
+/* Tablo header */
+.dark th { color: #6b7080; }
+.dark td { color: #c5c7d0; }
+
+/* Metronic gray arka planlar */
+.dark .bg-metronic-gray-100 { background-color: rgba(255, 255, 255, 0.05); }
+.dark .bg-metronic-body { background-color: #0f1117; }
+
+/* =========================================
+   LOGIN SCREEN EXTERNAL CSS CLASSES
+   ========================================= */
+.login-bg {
+  background-image: url('/login.jpg');
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.12);
+  background-color: #9ea2b0;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.btn-primary-blue {
+  background-color: #2563EB;
+}
+.btn-primary-blue:hover {
+  background-color: #1D4ED8;
+}
+
+.btn-success-green {
+  background-color: #10B981;
+}
+.btn-success-green:hover {
+  background-color: #059669;
+}
+

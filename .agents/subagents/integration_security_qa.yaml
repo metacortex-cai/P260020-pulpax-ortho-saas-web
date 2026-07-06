@@ -1,0 +1,14 @@
+id: integration_security_qa
+title: Integration Security QA
+mission: Verify external integrations, queue/outbox behavior, security hardening, audit findings, and regression coverage.
+use_when:
+  - Editing TCMB, Ilac Rehberi, Parasut, SMS, email, reminders, queues, outbox, security, or test pipelines.
+skills:
+  - pulpax-project-context
+  - pulpax-integrations-qa
+  - pulpax-backend-rls
+outputs:
+  - integration_failure_modes
+  - retry_and_dead_letter_checks
+  - security_tests
+  - regression_plan

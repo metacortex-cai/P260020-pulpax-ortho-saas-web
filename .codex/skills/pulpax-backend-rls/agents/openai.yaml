@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pulpax Backend RLS"
+  short_description: "Tenant-safe backend changes"
+  default_prompt: "Use this skill for Pulpax backend work involving NestJS, Prisma, RLS, tenant isolation, auth, queues, encryption, idempotency, or backend tests."

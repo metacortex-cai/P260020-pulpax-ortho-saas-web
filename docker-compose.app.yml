@@ -1,0 +1,96 @@
+name: pulpax-apps
+
+# Mevcut pulpax-db-v3 / pulpax-cache-v3 container'larının bulunduğu ağa bağlan
+networks:
+  default:
+    name: pulpax-app-v3_default
+    external: true
+
+services:
+
+  # ── SaaS Backend ────────────────────────────────────────────────────────────
+  backend:
+    image: pulpax-main-backend:latest
+    container_name: pulpax-backend-saas
+    ports:
+      - "6010:6010"
+    environment:
+      - PORT=6010
+      - DATABASE_URL=postgresql://pulpax_user:${POSTGRES_PASSWORD}@pulpax-db-v3:5432/pulpax_db
+      - DATABASE_URL_TENANT_A=postgresql://pulpax_user:${POSTGRES_PASSWORD}@pulpax-db-v3:5432/pulpax_tenant_a
+      - DATABASE_URL_TENANT_B=postgresql://pulpax_user:${POSTGRES_PASSWORD}@pulpax-db-v3:5432/pulpax_tenant_b
+      - REDIS_HOST=pulpax-cache-v3
+      - REDIS_PORT=6379
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=https://localhost:6001
+      - NODE_ENV=development
+    volumes:
+      - ./certs:/app/certs
+    restart: unless-stopped
+
+  # ── SaaS Frontend ────────────────────────────────────────────────────────────
+  frontend:
+    image: pulpax-main-frontend:latest
+    container_name: pulpax-frontend-saas
+    ports:
+      - "6001:6001"
+    depends_on:
+      - backend
+    environment:
+      - HOSTNAME=0.0.0.0
+      - PORT=6001
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=https://localhost:6010/api/v1
+    volumes:
+      - ./frontend-saas:/app/frontend-saas
+      - ./scripts:/app/scripts
+      - ./certs:/app/certs
+      - /app/frontend-saas/node_modules
+      - /app/frontend-saas/.next
+    restart: unless-stopped
+
+  # ── Clinic Backend ───────────────────────────────────────────────────────────
+  backend-clinic:
+    image: pulpax-main-backend-clinic:latest
+    container_name: pulpax-backend-clinic
+    command: ["sh", "-c", "/app/backend-clinic/node_modules/.bin/prisma db push --schema=prisma/tenant.prisma && node dist/src/main.js"]
+    ports:
+      - "7010:7010"
+    environment:
+      - PORT=7010
+      - DATABASE_URL=postgresql://pulpax_user:${POSTGRES_PASSWORD}@pulpax-db-v3:5432/pulpax_db
+      - DATABASE_URL_TENANT_A=postgresql://pulpax_user:${POSTGRES_PASSWORD}@pulpax-db-v3:5432/pulpax_tenant_a
+      - DATABASE_URL_TENANT_B=postgresql://pulpax_user:${POSTGRES_PASSWORD}@pulpax-db-v3:5432/pulpax_tenant_b
+      - TENANT_DATABASE_URL=postgresql://pulpax_user:${POSTGRES_PASSWORD}@pulpax-db-v3:5432/pulpax_tenant_a
+      - REDIS_HOST=pulpax-cache-v3
+      - REDIS_PORT=6379
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=https://localhost:6001,https://localhost:7001
+      - NODE_ENV=development
+    volumes:
+      - ./certs:/app/certs
+      - ./backend-clinic/uploads:/app/backend-clinic/uploads
+    restart: unless-stopped
+
+  # ── Clinic Frontend ──────────────────────────────────────────────────────────
+  frontend-clinic:
+    image: pulpax-main-frontend-clinic:latest
+    container_name: pulpax-frontend-clinic
+    ports:
+      - "7001:7001"
+    depends_on:
+      - backend-clinic
+    environment:
+      - HOSTNAME=0.0.0.0
+      - PORT=7001
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=https://localhost:7010/api/v1
+    volumes:
+      - ./frontend-clinic:/app/frontend-clinic
+      - ./scripts:/app/scripts
+      - ./certs:/app/certs
+      - /app/frontend-clinic/node_modules
+      - /app/frontend-clinic/.next
+    restart: unless-stopped

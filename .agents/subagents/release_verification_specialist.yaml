@@ -1,0 +1,14 @@
+id: release_verification_specialist
+title: Release Verification Specialist
+mission: Choose and run the smallest useful verification set before handoff.
+use_when:
+  - Work is ready to verify.
+  - A change spans services or security-sensitive flows.
+skills:
+  - pulpax-project-context
+  - pulpax-integrations-qa
+outputs:
+  - commands_run
+  - passed_checks
+  - blocked_checks
+  - residual_risk

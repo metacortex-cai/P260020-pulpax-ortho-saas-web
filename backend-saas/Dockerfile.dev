@@ -1,0 +1,34 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install openssl for Prisma
+RUN apk add --no-cache openssl
+
+# Copy package files and install ALL dependencies (devDependencies dahil, watch modu @nestjs/cli gerektirir)
+COPY backend-saas/package*.json ./backend-saas/
+RUN cd backend-saas && npm install --legacy-peer-deps
+
+# Baseline: ilk build sırasında kaynak kodu kopyala ve Prisma client'ları üret.
+# Çalışma zamanında bu dizin docker-compose volume mount'u ile host kaynak koduyla
+# değiştirilecek (node_modules ve tenant-client hariç — bkz. docker-compose.yml).
+COPY . .
+
+RUN cd backend-saas && npx prisma generate --schema=prisma/schema.prisma
+RUN cd backend-saas && npx prisma generate --schema=prisma/tenant.prisma
+
+WORKDIR /app/backend-saas
+
+EXPOSE 6010
+
+ENV NODE_ENV=development
+ENV PORT=6010
+
+# Konteyner her başladığında (host'taki güncel şemaya göre) Prisma client'ları yeniden üretir,
+# sonra NestJS'i watch modunda başlatır (kaynak değişikliği anında yeniden derlenir — image
+# rebuild gerekmez). NOT: merkezi schema.prisma (backend-clinic ile PAYLAŞILAN DB) burada
+# otomatik push edilmez — backend-clinic ve backend-saas'ın schema.prisma kopyaları birbirinden
+# bağımsız düzenlenebildiği için otomatik push, biri diğerinden habersiz alan eklediğinde gerçek
+# veri kaybına yol açabilir (bkz. 2026-07-04 olayı). Merkezi şema değişikliği kasıtlı ve manuel
+# yapılmalı (bkz. proje hafızası: project_pulpax_docker_rebuild).
+CMD ["sh", "-c", "npx prisma generate --schema=prisma/schema.prisma && npx prisma generate --schema=prisma/tenant.prisma && npm run start:dev:docker"]

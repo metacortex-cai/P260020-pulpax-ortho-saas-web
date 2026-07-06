@@ -1,0 +1,159 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pulpax-ortho-postgres-saas
+    ports:
+      - "5533:5432"
+    environment:
+      POSTGRES_USER: pulpax_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: pulpax_db
+    volumes:
+      - pgdata-ortho-saas:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulpax_user -d pulpax_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: pulpax-ortho-redis-saas
+    ports:
+      - "6481:6379"
+    volumes:
+      - redisdata-ortho-saas:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend-saas/Dockerfile.dev
+    container_name: pulpax-ortho-backend-saas
+    ports:
+      - "6110:6110"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - PORT=6110
+      - DATABASE_URL=postgresql://pulpax_user:${POSTGRES_PASSWORD}@postgres:5432/pulpax_db
+      - DATABASE_URL_TENANT_A=postgresql://pulpax_user:${POSTGRES_PASSWORD}@postgres:5432/pulpax_tenant_a
+      - DATABASE_URL_TENANT_B=postgresql://pulpax_user:${POSTGRES_PASSWORD}@postgres:5432/pulpax_tenant_b
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=https://localhost:6101
+      - NODE_ENV=development
+      - TSC_WATCHFILE=PriorityPollingInterval
+      - TSC_WATCHDIRECTORY=DynamicPriorityPolling
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
+      - WATCHPACK_POLLING=1000
+    volumes:
+      - ./backend-saas:/app/backend-saas
+      - ./certs:/app/certs
+      - /app/backend-saas/node_modules
+      - /app/backend-saas/dist
+      - /app/backend-saas/src/prisma/tenant-client
+    restart: always
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend-saas/Dockerfile
+    container_name: pulpax-ortho-frontend-saas
+    ports:
+      - "6101:6101"
+    depends_on:
+      - backend
+    environment:
+      - HOSTNAME=0.0.0.0
+      - PORT=6101
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=https://localhost:6110/api/v1
+    volumes:
+      - ./frontend-saas:/app/frontend-saas
+      - ./scripts:/app/scripts
+      - ./certs:/app/certs
+      - /app/frontend-saas/node_modules
+      - /app/frontend-saas/.next
+    restart: always
+
+  backend-clinic:
+    build:
+      context: .
+      dockerfile: backend-clinic/Dockerfile.dev
+    container_name: pulpax-ortho-backend-clinic
+    ports:
+      - "7110:7110"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - PORT=7110
+      - DATABASE_URL=postgresql://pulpax_user:${POSTGRES_PASSWORD}@postgres:5432/pulpax_db
+      - DATABASE_URL_TENANT_A=postgresql://pulpax_user:${POSTGRES_PASSWORD}@postgres:5432/pulpax_tenant_a
+      - DATABASE_URL_TENANT_B=postgresql://pulpax_user:${POSTGRES_PASSWORD}@postgres:5432/pulpax_tenant_b
+      - TENANT_DATABASE_URL=postgresql://pulpax_user:${POSTGRES_PASSWORD}@postgres:5432/pulpax_tenant_a
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=https://localhost:6101,https://localhost:7101
+      - NODE_ENV=development
+      - TSC_WATCHFILE=PriorityPollingInterval
+      - TSC_WATCHDIRECTORY=DynamicPriorityPolling
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
+      - WATCHPACK_POLLING=1000
+    volumes:
+      - ./backend-clinic:/app/backend-clinic
+      - ./certs:/app/certs
+      - ./backend-clinic/uploads:/app/backend-clinic/uploads
+      - /app/backend-clinic/node_modules
+      - /app/backend-clinic/dist
+      - /app/backend-clinic/src/prisma/tenant-client
+    restart: always
+
+  frontend-clinic:
+    build:
+      context: .
+      dockerfile: frontend-clinic/Dockerfile
+    container_name: pulpax-ortho-frontend-clinic
+    ports:
+      - "7101:7101"
+    depends_on:
+      - backend-clinic
+    environment:
+      - HOSTNAME=0.0.0.0
+      - PORT=7101
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=https://localhost:7110/api/v1
+      - WATCHPACK_POLLING=1000
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
+    volumes:
+      - ./frontend-clinic:/app/frontend-clinic
+      - ./scripts:/app/scripts
+      - ./certs:/app/certs
+      - /app/frontend-clinic/node_modules
+      - /app/frontend-clinic/.next
+    restart: always
+
+volumes:
+  pgdata-ortho-saas:
+  redisdata-ortho-saas:

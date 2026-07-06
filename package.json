@@ -1,0 +1,29 @@
+{
+  "name": "pulpax-saas",
+  "version": "1.1.6",
+  "description": "Pulpax Clinic Management System - Root Workspace",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && cd frontend-saas && npm install --legacy-peer-deps && cd ../frontend-clinic && npm install --legacy-peer-deps && cd ../backend-saas && npm install --legacy-peer-deps && cd ../backend-clinic && npm install --legacy-peer-deps",
+    "setup:https": "node scripts/setup-https.js",
+    "dev:frontend-saas": "cd frontend-saas && npm run dev",
+    "dev:frontend-clinic": "cd frontend-clinic && npm run dev",
+    "dev:backend-saas": "cd backend-saas && npm run start:dev",
+    "dev:backend-clinic": "cd backend-clinic && npm run start:dev",
+    "db:push-saas": "cd backend-saas && npx prisma db push",
+    "db:push-clinic": "cd backend-clinic && npx prisma db push",
+    "dev:saas": "concurrently \"npm run dev:frontend-saas\" \"npm run dev:backend-saas\"",
+    "dev:clinic": "concurrently \"npm run dev:frontend-clinic\" \"npm run dev:backend-clinic\"",
+    "dev": "concurrently \"npm run dev:saas\" \"npm run dev:clinic\"",
+    "test:functional": "npm --prefix backend-saas test && npm --prefix backend-clinic test && npm --prefix frontend-clinic run test:e2e:docker",
+    "test:regression": "npm --prefix backend-saas test && npm --prefix backend-clinic test && npm --prefix frontend-clinic run test:regression:docker",
+    "test:performance": "node ./loadtests/clinic-login.js",
+    "test:security:audit": "npm audit --audit-level=high && npm --prefix backend-clinic audit --audit-level=high && npm --prefix backend-saas audit --audit-level=high && npm --prefix frontend-clinic audit --audit-level=high && npm --prefix frontend-saas audit --audit-level=high",
+    "test:security:zap": "docker run --rm -v ${PWD}:/zap/wrk -t owasp/zap2docker-stable zap-baseline.py -t http://localhost:7001 -r zap-report.html",
+    "test:security": "npm run test:security:audit"
+  },
+  "devDependencies": {
+    "autocannon": "^8.0.0",
+    "concurrently": "^8.2.2"
+  }
+}

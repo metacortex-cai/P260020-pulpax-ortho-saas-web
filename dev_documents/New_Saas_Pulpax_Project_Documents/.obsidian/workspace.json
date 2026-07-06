@@ -1,0 +1,225 @@
+{
+  "main": {
+    "id": "051ef346baa25174",
+    "type": "split",
+    "children": [
+      {
+        "id": "5efd495240421093",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "3f3386b610883e23",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Hasta İşlemleri/Modallar/Mdl_Hasta Ekle.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Mdl_Hasta Ekle"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "e4e8820928520086",
+    "type": "split",
+    "children": [
+      {
+        "id": "149f8eaedf8e0d2c",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "04ccd22306892adc",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Dosya Gezgini"
+            }
+          },
+          {
+            "id": "bd2c41f08a56834f",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Ara"
+            }
+          },
+          {
+            "id": "ab2b46c586f447e5",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Yer İmleri"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "cee1a847e412a29f",
+    "type": "split",
+    "children": [
+      {
+        "id": "dd7318d4ce1e0d5a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "a3bcbf225a851ddc",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Hasta İşlemleri/Modallar/Mdl_Hasta Ekle.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Mdl_Hasta Ekle için geri bağlantılar"
+            }
+          },
+          {
+            "id": "8119d40884e02226",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Hasta İşlemleri/Modallar/Mdl_Hasta Ekle.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Mdl_Hasta Ekle'dan giden bağlantılar"
+            }
+          },
+          {
+            "id": "32d5439de73b0c3b",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiketler"
+            }
+          },
+          {
+            "id": "f95347227623962f",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Tüm özellikler"
+            }
+          },
+          {
+            "id": "4ce6f5236369da38",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Hasta İşlemleri/Modallar/Mdl_Hasta Ekle.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Mdl_Hasta Ekle ana hatları"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Hızlı geçişi aç": false,
+      "graph:Grafik görünümünü aç": false,
+      "canvas:Yeni tuval oluşturun": false,
+      "daily-notes:Bugünün Notunu Aç": false,
+      "templates:Şablon ekle": false,
+      "command-palette:Komut paletini aç": false,
+      "bases:Yeni taban oluştur": false
+    }
+  },
+  "active": "3f3386b610883e23",
+  "lastOpenFiles": [
+    "Hoş geldiniz.md",
+    "Hasta İşlemleri/Modallar/Mdl_Hasta Ekle.md",
+    "Hasta İşlemleri/Modallar/Mdl_Ödeme Ekle.md",
+    "Hasta İşlemleri/Modallar/Mdl_Randevu Ekle.md",
+    "Hasta İşlemleri/Modallar/Mdl_Doküman Ekle.md",
+    "Hasta İşlemleri/Hasta İşlemleri Logic.md",
+    "İnsan Kaynakları/İnsan Kaynakları Logic.md",
+    "Laboratuvar/Laboratuvar Logic.md",
+    "Muhasebe/Muhasebe Logic.md",
+    "Randevular/Randevular Logic.md",
+    "Stok-Depo/Stok-Depo Logic.md",
+    "Tarife İşlemleri/Tarife İşlemleri Logic.md",
+    "Hasta İşlemleri/Modallar/Mdl_Reçete Ekle.md",
+    "Hasta İşlemleri/Tablo Sayfaları/Tbl_Tedavi Planı Detay.md",
+    "Hasta İşlemleri/Tablo Sayfaları/Tbl_Aktif Tedavi Kalemleri.md",
+    "Hasta İşlemleri/Tablo Sayfaları/Tbl_Ödemeler.md",
+    "Hasta İşlemleri/Tablo Sayfaları/Tbl_Randevular.md",
+    "Hasta İşlemleri/Tablo Sayfaları/Tbl_Dokümanlar.md",
+    "bağlantı oluştur.md",
+    "Randevular/Tablo Sayfaları/Tbl_Randevu Talepleri.md",
+    "Muhasebe/Tablo Sayfaları/Tbl_Kasa-Bankalar.md",
+    "Hasta İşlemleri/Modallar/Modal_Hasta Ekle",
+    "Tarife İşlemleri/Tablo Sayfaları",
+    "Tarife İşlemleri/Modallar",
+    "Tarife İşlemleri",
+    "Muhasebe/Tablo Sayfaları/Tbl_Aday Hastalar.md",
+    "Muhasebe/Tablo Sayfaları/Tbl_Hasta Cari İzleme.md",
+    "Randevular/Modallar/Modal_Randevu Ekle-Düzenle.md",
+    "Destek",
+    "Raporlar",
+    "Ayarlar",
+    "İnsan Kaynakları/Modallar",
+    "İnsan Kaynakları/Tablo Sayfaları",
+    "İnsan Kaynakları",
+    "Hasta İşlemleri/Tablo Sayfaları/Tbl_Hastalar.md",
+    "Hasta İşlemleri/Tablo Sayfaları/Tbl_Reçeteler.md"
+  ]
+}

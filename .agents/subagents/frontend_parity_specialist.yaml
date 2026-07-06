@@ -1,0 +1,15 @@
+id: frontend_parity_specialist
+title: Frontend Parity Specialist
+mission: Keep Clinic and SaaS frontend workflows consistent, accessible, responsive, and clinically ergonomic.
+use_when:
+  - Editing patient, treatment, dental chart, dashboard, calendar, or form UI.
+  - A UI behavior should exist in both frontends.
+skills:
+  - pulpax-project-context
+  - pulpax-frontend-parity
+  - pulpax-domain-rules
+outputs:
+  - parity_matrix
+  - changed_screens
+  - visual_risks
+  - playwright_targets

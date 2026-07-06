@@ -1,0 +1,30 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install openssl for Prisma
+RUN apk add --no-cache openssl
+
+# Copy package files and install ALL dependencies (devDependencies dahil, watch modu @nestjs/cli gerektirir)
+COPY backend-clinic/package*.json ./backend-clinic/
+RUN cd backend-clinic && npm install --legacy-peer-deps --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-retries=5
+
+# Baseline: ilk build sırasında kaynak kodu kopyala ve Prisma client'ları üret.
+# Çalışma zamanında bu dizin docker-compose volume mount'u ile host kaynak koduyla
+# değiştirilecek (node_modules ve tenant-client hariç — bkz. docker-compose.yml).
+COPY . .
+
+RUN cd backend-clinic && npx prisma generate --schema=prisma/schema.prisma
+RUN cd backend-clinic && npx prisma generate --schema=prisma/tenant.prisma
+
+WORKDIR /app/backend-clinic
+
+EXPOSE 7010
+
+ENV NODE_ENV=development
+ENV PORT=7010
+
+# Konteyner her başladığında (host'taki güncel şemaya göre) Prisma client'ları yeniden üretir,
+# tenant DB şemasını senkronize eder, sonra NestJS'i watch modunda başlatır (kaynak değişikliği
+# anında yeniden derlenir — image rebuild gerekmez).
+CMD ["sh", "-c", "npx prisma generate --schema=prisma/schema.prisma && npx prisma generate --schema=prisma/tenant.prisma && npx prisma db push --schema=prisma/tenant.prisma && npm run start:dev:docker"]
