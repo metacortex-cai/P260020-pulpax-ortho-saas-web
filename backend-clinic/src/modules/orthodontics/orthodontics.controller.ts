@@ -9,15 +9,20 @@ import {
   Query,
   Headers,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OrthodonticsService } from './orthodontics.service';
+import { orthoRecordMulterOptions } from './multer-ortho-record.config';
 import {
   CreateOrthoCaseDto,
   UpdateOrthoCaseDto,
   CreateOrthoDiagnosisDto,
   CreateOrthoRecordDto,
+  UploadOrthoRecordDto,
 } from './dto/ortho-case.dto';
 import {
   CreateOrthoTrackDto,
@@ -30,6 +35,7 @@ import {
   CreateMiniScrewDto,
   UpdateMiniScrewDto,
   CreateGrowthAssessmentDto,
+  UpdateGrowthAssessmentDto,
   CreateRetentionPlanDto,
   UpdateRetentionPlanDto,
 } from './dto/ortho-extras.dto';
@@ -117,6 +123,22 @@ export class OrthodonticsController {
     @Headers('X-Tenant-ID') clinicId: string,
   ) {
     return this.orthodonticsService.addRecord(id, dto, clinicId);
+  }
+
+  /**
+   * POST /api/v1/orthodontics/cases/:id/records/upload
+   * Dosyayı (foto/röntgen/STL) diske yazar ve faz etiketli kayıt seti oluşturur.
+   * PatientDocument'ın .../documents/upload endpoint'iyle aynı desen.
+   */
+  @Post('cases/:id/records/upload')
+  @UseInterceptors(FileInterceptor('file', orthoRecordMulterOptions))
+  uploadRecord(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('X-Tenant-ID') clinicId: string,
+    @UploadedFile() file: any,
+    @Body() dto: UploadOrthoRecordDto,
+  ) {
+    return this.orthodonticsService.addRecordWithFile(id, clinicId, file, dto);
   }
 
   @Delete('records/:id')
@@ -236,6 +258,23 @@ export class OrthodonticsController {
     return this.orthodonticsService.addGrowthAssessment(id, dto, clinicId);
   }
 
+  @Patch('growth-assessments/:id')
+  updateGrowthAssessment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateGrowthAssessmentDto,
+    @Headers('X-Tenant-ID') clinicId: string,
+  ) {
+    return this.orthodonticsService.updateGrowthAssessment(id, dto, clinicId);
+  }
+
+  @Delete('growth-assessments/:id')
+  deleteGrowthAssessment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('X-Tenant-ID') clinicId: string,
+  ) {
+    return this.orthodonticsService.deleteGrowthAssessment(id, clinicId);
+  }
+
   // ── Retansiyon (Faz 08) ───────────────────────────────────────────────
 
   @Post('cases/:id/retention-plans')
@@ -254,5 +293,13 @@ export class OrthodonticsController {
     @Headers('X-Tenant-ID') clinicId: string,
   ) {
     return this.orthodonticsService.updateRetentionPlan(id, dto, clinicId);
+  }
+
+  @Delete('retention-plans/:id')
+  deleteRetentionPlan(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('X-Tenant-ID') clinicId: string,
+  ) {
+    return this.orthodonticsService.deleteRetentionPlan(id, clinicId);
   }
 }

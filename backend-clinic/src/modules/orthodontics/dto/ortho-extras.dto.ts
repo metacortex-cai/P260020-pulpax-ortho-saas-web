@@ -85,6 +85,24 @@ export class CreateGrowthAssessmentDto {
   note?: string;
 }
 
+export class UpdateGrowthAssessmentDto {
+  @IsOptional()
+  @IsDateString({}, { message: 'Röntgen tarihi geçerli bir tarih olmalıdır' })
+  xrayDate?: string;
+
+  @IsOptional()
+  @IsString()
+  skeletalAge?: string;
+
+  @IsOptional()
+  @IsIn(['ATILIM_ONCESI', 'ATILIMDA', 'ATILIM_SONRASI'], { message: 'Geçersiz büyüme fazı' })
+  growthPhase?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
 export class CreateRetentionPlanDto {
   @IsNotEmpty({ message: 'Retainer tipi zorunludur' })
   @IsIn(['SABIT_LINGUAL', 'HAWLEY', 'ESSIX'], { message: 'Geçersiz retainer tipi' })

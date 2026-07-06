@@ -171,3 +171,27 @@ export class CreateOrthoRecordDto {
   @IsDateString({}, { message: 'Çekim tarihi geçerli bir tarih olmalıdır' })
   takenAt?: string;
 }
+
+// Dosya yüklemeli kayıt oluşturma: fileUrl/fileType/fileSize multer'dan gelen
+// dosyadan türetilir (PatientDocument'ın UploadPatientDocumentDto'suyla aynı desen).
+export class UploadOrthoRecordDto {
+  @IsNotEmpty({ message: 'Kayıt tipi zorunludur' })
+  @IsIn(['FOTO', 'OPG', 'SEFALOMETRIK', 'EL_BILEK', 'CBCT', 'STL'], { message: 'Geçersiz kayıt tipi' })
+  recordType: string;
+
+  @IsNotEmpty({ message: 'Faz etiketi zorunludur' })
+  @IsIn(['FAZ01', 'FAZ02', 'FAZ03', 'FAZ04', 'FAZ05', 'FAZ06', 'FAZ07', 'FAZ08'], { message: 'Geçersiz faz etiketi' })
+  phase: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'Çekim tarihi geçerli bir tarih olmalıdır' })
+  takenAt?: string;
+}

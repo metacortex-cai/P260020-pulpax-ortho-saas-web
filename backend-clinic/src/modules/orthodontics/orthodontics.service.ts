@@ -10,6 +10,7 @@ import {
   UpdateOrthoCaseDto,
   CreateOrthoDiagnosisDto,
   CreateOrthoRecordDto,
+  UploadOrthoRecordDto,
 } from './dto/ortho-case.dto';
 import {
   CreateOrthoTrackDto,
@@ -22,6 +23,7 @@ import {
   CreateMiniScrewDto,
   UpdateMiniScrewDto,
   CreateGrowthAssessmentDto,
+  UpdateGrowthAssessmentDto,
   CreateRetentionPlanDto,
   UpdateRetentionPlanDto,
 } from './dto/ortho-extras.dto';
@@ -188,6 +190,33 @@ export class OrthodonticsService {
         fileUrl: dto.fileUrl,
         fileType: dto.fileType,
         fileSize: dto.fileSize,
+        description: dto.description,
+        takenAt: dto.takenAt ? new Date(dto.takenAt) : undefined,
+      },
+    });
+  }
+
+  /**
+   * Yüklenen dosyadan kayıt seti oluşturur (PatientDocument.addDocumentWithFile
+   * ile aynı desen): dosya diske multer ile yazılır, fileUrl/fileType/fileSize
+   * dosyadan türetilir.
+   */
+  async addRecordWithFile(caseId: string, clinicId: string, file: any, dto: UploadOrthoRecordDto) {
+    if (!file) {
+      throw new BadRequestException('Dosya bulunamadı.');
+    }
+    const tenantDb = await this.tenantPrisma.getClient();
+    await this.assertCase(caseId, clinicId);
+
+    return tenantDb.orthoRecordSet.create({
+      data: {
+        caseId,
+        recordType: dto.recordType,
+        phase: dto.phase,
+        name: dto.name || file.originalname,
+        fileUrl: `/uploads/ortho-records/${file.filename}`,
+        fileType: file.mimetype || 'application/octet-stream',
+        fileSize: file.size,
         description: dto.description,
         takenAt: dto.takenAt ? new Date(dto.takenAt) : undefined,
       },
@@ -492,6 +521,38 @@ export class OrthodonticsService {
     });
   }
 
+  async updateGrowthAssessment(assessmentId: string, dto: UpdateGrowthAssessmentDto, clinicId: string) {
+    const tenantDb = await this.tenantPrisma.getClient();
+    const assessment = await tenantDb.orthoGrowthAssessment.findFirst({
+      where: { id: assessmentId, case: { clinicId } },
+    });
+    if (!assessment) {
+      throw new NotFoundException('Büyüme değerlendirmesi bulunamadı veya bu kliniğe ait değil.');
+    }
+
+    return tenantDb.orthoGrowthAssessment.update({
+      where: { id: assessmentId },
+      data: {
+        xrayDate: dto.xrayDate ? new Date(dto.xrayDate) : undefined,
+        skeletalAge: dto.skeletalAge,
+        growthPhase: dto.growthPhase,
+        note: dto.note,
+      },
+    });
+  }
+
+  async deleteGrowthAssessment(assessmentId: string, clinicId: string) {
+    const tenantDb = await this.tenantPrisma.getClient();
+    const assessment = await tenantDb.orthoGrowthAssessment.findFirst({
+      where: { id: assessmentId, case: { clinicId } },
+    });
+    if (!assessment) {
+      throw new NotFoundException('Büyüme değerlendirmesi bulunamadı veya bu kliniğe ait değil.');
+    }
+    await tenantDb.orthoGrowthAssessment.delete({ where: { id: assessmentId } });
+    return { success: true };
+  }
+
   // ── Retansiyon (OrthoRetentionPlan) ───────────────────────────────────
 
   async addRetentionPlan(caseId: string, dto: CreateRetentionPlanDto, clinicId: string) {
@@ -529,6 +590,18 @@ export class OrthodonticsService {
         note: dto.note,
       },
     });
+  }
+
+  async deleteRetentionPlan(planId: string, clinicId: string) {
+    const tenantDb = await this.tenantPrisma.getClient();
+    const plan = await tenantDb.orthoRetentionPlan.findFirst({
+      where: { id: planId, case: { clinicId } },
+    });
+    if (!plan) {
+      throw new NotFoundException('Retansiyon planı bulunamadı veya bu kliniğe ait değil.');
+    }
+    await tenantDb.orthoRetentionPlan.delete({ where: { id: planId } });
+    return { success: true };
   }
 
   // ── Yardımcılar ───────────────────────────────────────────────────────
