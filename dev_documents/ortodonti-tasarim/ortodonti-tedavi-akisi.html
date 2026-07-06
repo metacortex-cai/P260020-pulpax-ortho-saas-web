@@ -1,0 +1,992 @@
+<title>Ortodonti Tedavi Akışı — Sistem Yapı Dokümanı</title>
+<style>
+  :root {
+    --bg: #eeece4;
+    --surface: #f8f6f1;
+    --surface-2: #f2efe7;
+    --ink: #1e2023;
+    --ink-muted: #5c5f63;
+    --ink-faint: #8a8d8f;
+    --rule: #d9d3c4;
+    --rule-strong: #c7bfab;
+    --accent: #a63a2e;
+    --accent-ink: #ffffff;
+    --accent-soft: #ecd9d3;
+    --accent2: #3e5b6e;
+    --accent2-soft: #dde6ea;
+    --shadow: 0 1px 0 rgba(30,32,35,0.04);
+    --font-display: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', serif;
+    --font-body: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+    --font-mono: Consolas, 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #14171a;
+    --surface: #1b1e22;
+    --surface-2: #202428;
+    --ink: #e9e6df;
+    --ink-muted: #a3a6a9;
+    --ink-faint: #74777a;
+    --rule: #2c3136;
+    --rule-strong: #383e44;
+    --accent: #e0876f;
+    --accent-ink: #14171a;
+    --accent-soft: rgba(224,135,111,0.14);
+    --accent2: #7fa2b5;
+    --accent2-soft: rgba(127,162,181,0.14);
+    --shadow: 0 1px 0 rgba(0,0,0,0.3);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171a;
+      --surface: #1b1e22;
+      --surface-2: #202428;
+      --ink: #e9e6df;
+      --ink-muted: #a3a6a9;
+      --ink-faint: #74777a;
+      --rule: #2c3136;
+      --rule-strong: #383e44;
+      --accent: #e0876f;
+      --accent-ink: #14171a;
+      --accent-soft: rgba(224,135,111,0.14);
+      --accent2: #7fa2b5;
+      --accent2-soft: rgba(127,162,181,0.14);
+      --shadow: 0 1px 0 rgba(0,0,0,0.3);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { transition: none !important; animation: none !important; }
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  code {
+    font-family: var(--font-mono);
+    background: var(--surface-2);
+    padding: 0.08rem 0.4rem;
+    border-radius: 2px;
+    font-size: 0.88em;
+  }
+
+  a { color: var(--accent2); }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent2);
+    outline-offset: 2px;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .shell {
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 3.2rem 2rem 6rem;
+  }
+
+  /* ---------- Header ---------- */
+  header.intro {
+    max-width: 780px;
+    margin: 0 0 3rem;
+  }
+  header.intro .eyebrow { color: var(--accent); margin-bottom: 0.9rem; }
+  header.intro h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2rem, 3.4vw, 2.7rem);
+    line-height: 1.18;
+    margin: 0 0 1.1rem;
+    text-wrap: balance;
+  }
+  header.intro p {
+    font-size: 1.05rem;
+    color: var(--ink-muted);
+    max-width: 62ch;
+    margin: 0 0 0.8rem;
+  }
+  header.intro p strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Timeline strip ---------- */
+  .timeline {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(120px, 1fr);
+    gap: 2px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow-x: auto;
+    margin: 0 0 4rem;
+  }
+  .timeline a {
+    display: block;
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    padding: 0.9rem 0.8rem 0.8rem;
+    transition: background 120ms ease;
+  }
+  .timeline a:hover { background: var(--surface-2); }
+  .timeline .n {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .timeline .t {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin: 0.35rem 0 0.3rem;
+    line-height: 1.25;
+  }
+  .timeline .d {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Page grid ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0,1fr);
+    gap: 3.2rem;
+    align-items: start;
+  }
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static !important; order: 2; }
+    main { order: 1; }
+  }
+
+  nav.toc {
+    position: sticky;
+    top: 2.4rem;
+    font-size: 0.86rem;
+  }
+  nav.toc .eyebrow { margin-bottom: 0.8rem; display: block; }
+  nav.toc ol {
+    list-style: none;
+    margin: 0 0 1.6rem;
+    padding: 0;
+    border-left: 1px solid var(--rule);
+  }
+  nav.toc li a {
+    display: block;
+    padding: 0.32rem 0 0.32rem 0.9rem;
+    margin-left: -1px;
+    border-left: 1px solid transparent;
+    color: var(--ink-muted);
+    text-decoration: none;
+  }
+  nav.toc li a:hover { color: var(--ink); border-left-color: var(--accent); }
+  nav.toc .sub { margin: 0 0 1.6rem; padding-left: 0.9rem; border-left: 1px solid var(--rule); }
+  nav.toc .sub a { display: block; padding: 0.28rem 0; color: var(--ink-muted); text-decoration: none; font-size: 0.84rem; }
+  nav.toc .sub a:hover { color: var(--accent2); }
+
+  /* ---------- Phase sections ---------- */
+  section.phase {
+    padding: 2.6rem 0;
+    border-top: 1px solid var(--rule);
+    scroll-margin-top: 1.5rem;
+  }
+  section.phase:first-of-type { border-top: none; padding-top: 0; }
+
+  .phase-head { margin-bottom: 1.3rem; }
+  .phase-head .eyebrow { margin-bottom: 0.5rem; }
+  .phase-head h2 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.7rem;
+    margin: 0 0 0.7rem;
+    text-wrap: balance;
+  }
+  .phase-head .lede {
+    color: var(--ink-muted);
+    max-width: 70ch;
+    margin: 0;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  .chip {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    padding: 0.28rem 0.6rem;
+    border-radius: 2px;
+    background: var(--accent2-soft);
+    color: var(--accent2);
+    white-space: nowrap;
+  }
+  .chip.warm { background: var(--accent-soft); color: var(--accent); }
+
+  .panels {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 1.6rem;
+    margin-top: 1.6rem;
+  }
+  @media (max-width: 720px) { .panels { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 1.3rem 1.4rem;
+  }
+  .card h3 {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-size: 0.74rem;
+    color: var(--ink-faint);
+    margin: 0 0 0.9rem;
+  }
+  .card ul { margin: 0; padding-left: 1.1rem; }
+  .card li { margin: 0 0 0.5rem; }
+  .card li:last-child { margin-bottom: 0; }
+
+  table.fields { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  table.fields th {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding: 0 0 0.5rem;
+    border-bottom: 1px solid var(--rule-strong);
+  }
+  table.fields td {
+    padding: 0.55rem 0.6rem 0.55rem 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  table.fields tr:last-child td { border-bottom: none; }
+  table.fields td.field { font-family: var(--font-mono); font-size: 0.83rem; color: var(--accent2); white-space: nowrap; }
+  .table-wrap { overflow-x: auto; }
+
+  .track-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.2rem;
+    margin-top: 1.4rem;
+  }
+  @media (max-width: 720px) { .track-grid { grid-template-columns: 1fr; } }
+  .track {
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 1.2rem 1.3rem;
+    background: var(--surface);
+  }
+  .track.fixed { border-top: 3px solid var(--accent2); }
+  .track.aligner { border-top: 3px solid var(--accent); }
+  .track h4 {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    margin: 0 0 0.8rem;
+  }
+  .track.fixed h4 { color: var(--accent2); }
+  .track.aligner h4 { color: var(--accent); }
+  .track ol { margin: 0; padding-left: 1.15rem; }
+  .track li { margin-bottom: 0.5rem; }
+  .track li:last-child { margin-bottom: 0; }
+
+  .callout-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.2rem;
+    margin-top: 1.2rem;
+  }
+  @media (max-width: 720px) { .callout-grid { grid-template-columns: 1fr; } }
+  .callout {
+    padding: 1.1rem 1.3rem;
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--ink-faint);
+    background: var(--surface);
+    border-radius: 0 3px 3px 0;
+  }
+  .callout .eyebrow { margin-bottom: 0.4rem; }
+  .callout p { margin: 0; color: var(--ink-muted); font-size: 0.92rem; }
+
+  /* ---------- Entity summary ---------- */
+  table.entities { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 1.4rem; }
+  table.entities th {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding: 0 0.8rem 0.6rem 0;
+    border-bottom: 1px solid var(--rule-strong);
+  }
+  table.entities td {
+    padding: 0.85rem 0.8rem 0.85rem 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  table.entities td.entity { font-family: var(--font-mono); font-weight: 600; color: var(--ink); white-space: nowrap; }
+  table.entities td.fields-list { color: var(--ink-muted); font-size: 0.85rem; }
+
+  /* ---------- Screen map ---------- */
+  .screen-groups { display: flex; flex-direction: column; gap: 1.8rem; margin-top: 1.4rem; }
+  .screen-group .eyebrow { color: var(--accent); margin-bottom: 0.7rem; }
+  .screen-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 0.9rem; }
+  .screen-card {
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    border-radius: 3px;
+    padding: 0.95rem 1.05rem;
+  }
+  .screen-card .name { font-weight: 600; font-size: 0.94rem; margin-bottom: 0.35rem; }
+  .screen-card .purpose { color: var(--ink-muted); font-size: 0.84rem; line-height: 1.5; }
+
+  /* ---------- Differentiators ---------- */
+  .diff-list { margin-top: 1.4rem; border-top: 1px solid var(--rule); }
+  .diff-row {
+    display: grid;
+    grid-template-columns: 1.6fr 2fr 2fr;
+    gap: 1.5rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  @media (max-width: 780px) { .diff-row { grid-template-columns: 1fr; gap: 0.4rem; } }
+  .diff-row .label { font-weight: 600; }
+  .diff-row .generic { color: var(--ink-faint); font-size: 0.9rem; }
+  .diff-row .generic::before { content: "Standart yazılım: "; font-family: var(--font-mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; display: block; color: var(--ink-faint); margin-bottom: 0.2rem; }
+  .diff-row .ours { color: var(--accent); font-size: 0.9rem; }
+  .diff-row .ours::before { content: "Ortodonti-özel: "; font-family: var(--font-mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; display: block; color: var(--accent); opacity: 0.75; margin-bottom: 0.2rem; }
+
+  footer.note {
+    margin-top: 4rem;
+    padding-top: 1.6rem;
+    border-top: 1px solid var(--rule);
+    color: var(--ink-faint);
+    font-size: 0.85rem;
+    max-width: 70ch;
+  }
+</style>
+
+<div class="shell">
+
+  <header class="intro">
+    <div class="eyebrow">Yapı Dokümanı · Sürüm 1</div>
+    <h1>Ortodonti Tedavi Akışı ve Ekran Yapısı</h1>
+    <p>Bu doküman ortodontik tedavinin ilk başvurudan retansiyon sonuna kadar klinikte nasıl ilerlediğini anlatır ve her aşamayı <strong>hangi verinin toplanacağı, hangi randevu tipinin açılacağı ve hangi ekranın gerekeceği</strong> düzeyinde yapılandırır. Amaç, genel bir diş kliniği takvim/dosya mantığının ötesine geçip ortodontiye özgü ilerlemeyi (tel/plak geçmişi, büyüme takibi, retansiyon) sistemin doğal bir parçası hâline getirmek.</p>
+  </header>
+
+  <nav class="timeline" aria-label="Tedavi yolculuğu">
+    <a href="#intake"><span class="n">01</span><span class="t">İlk Başvuru</span><span class="d">1 gün</span></a>
+    <a href="#exam"><span class="n">02</span><span class="t">Muayene &amp; Kayıt</span><span class="d">1 gün</span></a>
+    <a href="#planning"><span class="n">03</span><span class="t">Planlama</span><span class="d">1–2 hafta</span></a>
+    <a href="#placement"><span class="n">04</span><span class="t">Aparey Yerleştirme</span><span class="d">1 gün</span></a>
+    <a href="#active"><span class="n">05</span><span class="t">Aktif Tedavi</span><span class="d">12–30 ay</span></a>
+    <a href="#finishing"><span class="n">06</span><span class="t">Bitirme</span><span class="d">4–8 hafta</span></a>
+    <a href="#debond"><span class="n">07</span><span class="t">Aparey Çıkarma</span><span class="d">1 gün</span></a>
+    <a href="#retention"><span class="n">08</span><span class="t">Retansiyon</span><span class="d">Ömür boyu</span></a>
+  </nav>
+
+  <div class="layout">
+    <nav class="toc" aria-label="İçindekiler">
+      <span class="eyebrow">Fazlar</span>
+      <ol>
+        <li><a href="#intake">01 · İlk Başvuru</a></li>
+        <li><a href="#exam">02 · Muayene &amp; Kayıt</a></li>
+        <li><a href="#planning">03 · Planlama</a></li>
+        <li><a href="#placement">04 · Aparey Yerleştirme</a></li>
+        <li><a href="#active">05 · Aktif Tedavi</a></li>
+        <li><a href="#finishing">06 · Bitirme</a></li>
+        <li><a href="#debond">07 · Aparey Çıkarma</a></li>
+        <li><a href="#retention">08 · Retansiyon</a></li>
+        <li><a href="#tracks">Ek Tedavi Tipleri</a></li>
+        <li><a href="#special">Özel Süreçler</a></li>
+      </ol>
+      <span class="eyebrow">Sistem</span>
+      <div class="sub">
+        <a href="#entities">Veri Modeli Özeti</a>
+        <a href="#screens">Ekran Haritası</a>
+        <a href="#tariff">Tarife &amp; Zorluk Seviyeleri</a>
+        <a href="#market">Piyasa Konumlandırması</a>
+        <a href="#diff">Farklılaştırıcı Özellikler</a>
+      </div>
+    </nav>
+
+    <main>
+
+      <section class="phase" id="intake">
+        <div class="phase-head">
+          <div class="eyebrow">Faz 01</div>
+          <h2>İlk Başvuru &amp; Kayıt</h2>
+          <p class="lede">Hasta kliniğe ilk kez gelir. Bu aşamada henüz klinik bir teşhis yoktur — amaç şikayeti, beklentiyi ve idari bilgileri kayıt altına almaktır.</p>
+          <div class="meta-row">
+            <span class="chip">Randevu: İlk Muayene · 30–45 dk</span>
+            <span class="chip warm">Tek seferlik</span>
+          </div>
+        </div>
+        <div class="panels">
+          <div class="card">
+            <h3>Toplanan Veri</h3>
+            <div class="table-wrap">
+              <table class="fields">
+                <tr><th>Alan</th><th>Açıklama</th></tr>
+                <tr><td class="field">sikayet</td><td>Hastanın kendi ifadesiyle başvuru nedeni</td></tr>
+                <tr><td class="field">beklenti</td><td>Estetik / fonksiyonel beklenti notu</td></tr>
+                <tr><td class="field">tibbiOzgecmis</td><td>Sistemik hastalık, alerji, kullanılan ilaç</td></tr>
+                <tr><td class="field">sevkEden</td><td>Yönlendiren diş hekimi (varsa)</td></tr>
+                <tr><td class="field">kvkkOnay</td><td>Aydınlatılmış rıza / KVKK onay kaydı</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Ekran</h3>
+            <ul>
+              <li><strong>Hasta Kayıt Formu</strong> — mevcut CRM akışıyla aynı, üzerine "ortodonti şikayeti" alanı eklenir</li>
+              <li>Bu adım sonunda hasta dosyasına <span class="chip">Ortodonti Vakası</span> statüsü açılır</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="phase" id="exam">
+        <div class="phase-head">
+          <div class="eyebrow">Faz 02</div>
+          <h2>Ortodontik Muayene &amp; Kayıt Alma</h2>
+          <p class="lede">Klinik muayene yapılır ve tanı için gereken tüm görsel/radyografik/ölçüsel kayıtlar toplanır. Bu aşamanın çıktısı, doktorun arka planda tedavi planı hazırlayabileceği tam bir veri setidir.</p>
+          <div class="meta-row">
+            <span class="chip">Randevu: Kayıt Alma · 45–60 dk</span>
+          </div>
+        </div>
+        <div class="panels">
+          <div class="card">
+            <h3>Klinik Bulgular</h3>
+            <div class="table-wrap">
+              <table class="fields">
+                <tr><th>Alan</th><th>Örnek Değer</th></tr>
+                <tr><td class="field">iskeletSinifi</td><td>Sınıf I / II / III</td></tr>
+                <tr><td class="field">profil</td><td>Düz / konveks / konkav</td></tr>
+                <tr><td class="field">overjet</td><td>mm cinsinden</td></tr>
+                <tr><td class="field">overbite</td><td>% örtme</td></tr>
+                <tr><td class="field">capraskurluk</td><td>Hafif / orta / şiddetli</td></tr>
+                <tr><td class="field">ortaHattKaymasi</td><td>mm, yön (sağ/sol)</td></tr>
+                <tr><td class="field">capraz-acikKapanis</td><td>Bölge, mm</td></tr>
+                <tr><td class="field">tmeDegerlendirme</td><td>Ağrı / klik / kısıtlılık notu</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Model Analizi</h3>
+            <div class="table-wrap">
+              <table class="fields">
+                <tr><th>Alan</th><th>Açıklama</th></tr>
+                <tr><td class="field">boltonAnalizi</td><td>Üst/alt diş mesiodistal genişlik oranı — bitirmede overjet/overbite uyumu için</td></tr>
+                <tr><td class="field">haysNanceAnalizi</td><td>Karışık dişlenimde ark uzunluğu / boşluk analizi (büyüme çağı hastalarda)</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Kayıt Seti</h3>
+            <ul>
+              <li><strong>Fotoğraf</strong> — 8 standart poz (frontal dinlenim/gülümseme, profil, 3/4, ağız içi sağ/sol/frontal, oklüzal üst/alt)</li>
+              <li><strong>Panoramik röntgen (OPG)</strong></li>
+              <li><strong>Lateral sefalometrik röntgen</strong> + açısal analiz (SNA, SNB, ANB vb.)</li>
+              <li><strong>El-bilek röntgeni</strong> — sadece büyüme çağı hastalarda</li>
+              <li><strong>CBCT</strong> — gömülü diş / kök rezorpsiyon şüphesinde</li>
+              <li><strong>Ölçü / intraoral tarama</strong> — STL dosyası, üst+alt ark</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1.2rem;">
+          <h3>Ekranlar</h3>
+          <ul>
+            <li><strong>Ortodonti Değerlendirme Formu</strong> — klinik bulgu alanları, yapılandırılmış seçim listeleri</li>
+            <li><strong>Kayıt Galerisi</strong> — fotoğraf/röntgen/STL yükleme, faz etiketiyle saklama (bu galeri Faz 06'daki öncesi/sonrası karşılaştırmayı besleyecek)</li>
+            <li><strong>Sefalometrik Analiz Girişi</strong> — açısal ölçüm tablosu, opsiyonel iz düşürme (tracing) görseli</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="phase" id="planning">
+        <div class="phase-head">
+          <div class="eyebrow">Faz 03</div>
+          <h2>Tedavi Planlama &amp; Vaka Sunumu</h2>
+          <p class="lede">Toplanan veriler doktor tarafından değerlendirilir, tedavi seçenekleri belirlenir ve hastaya sunulur. Bu faz onay ve sözleşmeyle kapanır — buradan itibaren finans modülüyle kesişim başlar.</p>
+          <div class="meta-row">
+            <span class="chip">Randevu: Vaka Sunumu · 30 dk</span>
+          </div>
+        </div>
+        <div class="panels">
+          <div class="card">
+            <h3>Planlama Kararları</h3>
+            <div class="table-wrap">
+              <table class="fields">
+                <tr><th>Alan</th><th>Değer Kümesi</th></tr>
+                <tr><td class="field">apareyTipi</td><td>Sabit-metal / sabit-seramik / lingual / şeffaf plak / fonksiyonel + <a href="#tracks">ek tedavi tipleri</a></td></tr>
+                <tr><td class="field">cekimKarari</td><td>Çekimli / çekimsiz, hangi dişler</td></tr>
+                <tr><td class="field">cerrahiGerekli</td><td>Evet/Hayır — evetse ortognatik cerrahi koordinasyonu açılır (bkz. Özel Süreçler)</td></tr>
+                <tr><td class="field">tahminiSure</td><td>Ay cinsinden aralık</td></tr>
+                <tr><td class="field">tahminiMaliyet</td><td>Mevcut finans modülüne bağlanır</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Ekranlar</h3>
+            <ul>
+              <li><strong>Tedavi Planı Oluşturucu</strong> — aparey tipi, çekim kararı, süre/maliyet tahmini seçilir</li>
+              <li><strong>Vaka Sunumu / Onam Ekranı</strong> — seçenekler hasta ile paylaşılır, dijital onam imzası alınır</li>
+              <li>Onay sonrası mevcut <strong>sözleşme / ödeme planı</strong> akışı tetiklenir</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="phase" id="placement">
+        <div class="phase-head">
+          <div class="eyebrow">Faz 04</div>
+          <h2>Aparey Yerleştirme</h2>
+          <p class="lede">Seçilen apareye göre iki farklı klinik akış izlenir. Sistem tasarımı bu ayrımı en başından itibaren desteklemeli — çünkü Faz 05'teki takip mantığı da bu seçime göre tamamen değişir.</p>
+        </div>
+        <div class="track-grid">
+          <div class="track fixed">
+            <h4>Sabit Tedavi</h4>
+            <ol>
+              <li>Gerekirse separatör yerleştirme (1 hafta önceden)</li>
+              <li>Bant/braket yapıştırma (bonding) — dişe göre dikey konum kaydı (indirekt bonding şablonu kullanılıyorsa referans olur)</li>
+              <li>İlk ark teli takılır — ince, esnek NiTi</li>
+            </ol>
+          </div>
+          <div class="track aligner">
+            <h4>Şeffaf Plak</h4>
+            <ol>
+              <li>Dijital tedavi simülasyonu hasta ile paylaşılır ve onaylanır</li>
+              <li>Attachment (kompozit tutamaç) yerleştirme</li>
+              <li>İlk plak seti teslimi + günlük 20–22 saat kullanım talimatı</li>
+            </ol>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1.2rem;">
+          <h3>Ekran</h3>
+          <ul>
+            <li><strong>Aparey Yerleştirme Kaydı</strong> — aparey tipi, marka/malzeme, yerleştirme tarihi, ilk set/tel bilgisi. Bu kayıt Faz 05'teki zaman çizelgesinin ilk satırı olur.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="phase" id="active">
+        <div class="phase-head">
+          <div class="eyebrow">Faz 05 · En Uzun Faz</div>
+          <h2>Aktif Tedavi Takibi</h2>
+          <p class="lede">Tedavinin gövdesi burasıdır — genellikle 12 ila 30 ay sürer. Değer, tek tek randevulardan değil, randevular arasında biriken <strong>ilerleme geçmişinden</strong> gelir: hangi tel takıldı, hangi set teslim edildi, uyum nasıldı.</p>
+        </div>
+        <div class="track-grid">
+          <div class="track fixed">
+            <h4>Sabit Tedavi · 4–8 haftada bir</h4>
+            <ol>
+              <li>Tel değişimi (ince→orta→kalın, NiTi→çelik/TMA ilerlemesi)</li>
+              <li>Ligatür / self-ligating braket kontrolü</li>
+              <li>Elastik (lastik) reçetesi ve uyum kontrolü</li>
+              <li>IPR (interproksimal küçültme) seansları</li>
+              <li>Mini vida (TAD) uygulama ve kontrolü</li>
+              <li>Acil: kırık braket, batan tel</li>
+            </ol>
+          </div>
+          <div class="track aligner">
+            <h4>Şeffaf Plak · 6–10 haftada bir kontrol</h4>
+            <ol>
+              <li>Uyum (wear-time) ve "tracking" kontrolü</li>
+              <li>Yeni set teslimi / kalan set sayımı</li>
+              <li>Refinement kararı — plandan sapmada yeni ölçü + ek set</li>
+              <li>Attachment yenileme</li>
+              <li>IPR seansları</li>
+            </ol>
+          </div>
+        </div>
+        <div class="panels" style="margin-top:1.2rem;">
+          <div class="card">
+            <h3>Randevu Kaydı Alanları</h3>
+            <div class="table-wrap">
+              <table class="fields">
+                <tr><th>Alan</th><th>Açıklama</th></tr>
+                <tr><td class="field">telBoyutu</td><td>Sabit tedavide, örn. 0.014 NiTi</td></tr>
+                <tr><td class="field">setNumarasi</td><td>Aligner'da hangi set aktif</td></tr>
+                <tr><td class="field">elastikTipi</td><td>Class II / III / çapraz, kullanım süresi</td></tr>
+                <tr><td class="field">iprYapildi</td><td>Bölge, mm</td></tr>
+                <tr><td class="field">uyumNotu</td><td>Hasta uyumu (aligner wear-time, elastik kullanımı)</td></tr>
+                <tr><td class="field">sonrakiRandevuAraligi</td><td>Hafta cinsinden</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Ekranlar</h3>
+            <ul>
+              <li><strong>Aktif Tedavi Zaman Çizelgesi</strong> — tel/plak geçmişinin kronolojik görünümü</li>
+              <li><strong>Randevu Ayar Formu</strong> — her ziyarette doldurulan hızlı kayıt formu</li>
+              <li><strong>Uyum Takibi</strong> — aligner hastalarında wear-time / tracking göstergesi</li>
+              <li><strong>Mini Vida Takibi</strong> — bölge, amaç, kontrol geçmişi</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="phase" id="finishing">
+        <div class="phase-head">
+          <div class="eyebrow">Faz 06</div>
+          <h2>Bitirme &amp; Detaylandırma</h2>
+          <p class="lede">Kaba hizalama tamamlandıktan sonra ince ayarların yapıldığı kısa fazdır: torque/rotasyon düzeltmeleri, oklüzal ayarlama ve dişlerin son haftalarda "settling" ile oturması.</p>
+          <div class="meta-row"><span class="chip">4–8 hafta</span></div>
+        </div>
+        <div class="card">
+          <h3>Ekran</h3>
+          <ul>
+            <li><strong>Bitirme Kontrol Listesi</strong> — torque/rotasyon/oklüzyon maddelerinin tek tek işaretlendiği checklist, çıkarma randevusu için hazırlık</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="phase" id="debond">
+        <div class="phase-head">
+          <div class="eyebrow">Faz 07</div>
+          <h2>Aparey Çıkarma &amp; Final Kayıtlar</h2>
+          <p class="lede">Braket/bant çıkarılır, kompozit artıkları temizlenir ve Faz 02'deki kayıt seti aynı standartla tekrarlanır — bu tekrar, öncesi/sonrası karşılaştırmayı mümkün kılan şeydir.</p>
+          <div class="meta-row"><span class="chip">Randevu: Aparey Çıkarma · 45–60 dk</span></div>
+        </div>
+        <div class="card">
+          <h3>Ekran</h3>
+          <ul>
+            <li><strong>Öncesi/Sonrası Karşılaştırma Görüntüleyici</strong> — Faz 02 ve Faz 07 kayıt setlerini yan yana gösterir (aynı poz standardı sayesinde otomatik eşleştirilebilir)</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="phase" id="retention">
+        <div class="phase-head">
+          <div class="eyebrow">Faz 08 · Genel Yazılımların Atladığı Faz</div>
+          <h2>Retansiyon</h2>
+          <p class="lede">Tedavi "bitmiş" görünse de dişler yaşam boyu hafifçe hareket etmeye devam eder. Bu yüzden retansiyon, kapanan bir dosya değil, uzun soluklu ayrı bir takip fazı olarak modellenmeli.</p>
+        </div>
+        <div class="panels">
+          <div class="card">
+            <h3>Retainer Tipi &amp; Takvim</h3>
+            <div class="table-wrap">
+              <table class="fields">
+                <tr><th>Alan</th><th>Açıklama</th></tr>
+                <tr><td class="field">retainerTipi</td><td>Sabit (lingual tel) / Hawley / Essix (şeffaf)</td></tr>
+                <tr><td class="field">kullanimTalimati</td><td>İlk 3–6 ay tam gün → sonra sadece gece</td></tr>
+                <tr><td class="field">kontrolTakvimi</td><td>1. ay, 3. ay, 6. ay, 1. yıl, sonrasında yıllık</td></tr>
+                <tr><td class="field">durum</td><td>Sağlam / gevşemiş / kırık-kayıp</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Ekranlar</h3>
+            <ul>
+              <li><strong>Retansiyon Takvimi</strong> — otomatik hatırlatmalı kontrol planı</li>
+              <li><strong>Retainer Durum Kartı</strong> — yenileme geçmişi, kayıp/kırık kaydı</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="phase" id="tracks">
+        <div class="phase-head">
+          <div class="eyebrow">Sistem · v1 Kapsam Kararı</div>
+          <h2>Ek Tedavi Tipleri</h2>
+          <p class="lede">Yukarıdaki 8 faz kapsamlı sabit/aligner tedavisi üzerinden anlatıldı. Gerçekte ortodontide bundan fazlası var ve her biri farklı bir <strong>takip birimi</strong> taşıyor — randevu değil, aktivasyon günlüğü, kullanım süresi veya egzersiz protokolü olabilir. Aşağıdakiler v1 kapsamına alındı; yarık damak-dudak (NAM) ve uyku apnesi apareyleri gibi alt-uzmanlık gerektiren düşük hacimli vakalar kapsam dışı bırakıldı.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="entities">
+            <tr><th>Tedavi Tipi</th><th>Hasta Grubu</th><th>Takip Birimi</th><th>v1</th></tr>
+            <tr><td class="entity">Faz 1 / Erken Müdahale</td><td class="fields-list">7–10 yaş, çapraz kapanış, alışkanlık, yer darlığı</td><td class="fields-list">Randevu + gözlem/dinlenme dönemi (Faz 2 kararına kadar)</td><td class="fields-list">Dahil</td></tr>
+            <tr><td class="entity">Üst Çene Genişletme (RPE/Hyrax, SARPE)</td><td class="fields-list">Çocuk/ergen, cerrahi destekli yetişkin</td><td class="fields-list">Aktivasyon günlüğü (vida turu)</td><td class="fields-list">Dahil</td></tr>
+            <tr><td class="entity">Headgear / Ekstraoral Çekim</td><td class="fields-list">Class II/III büyüme modifikasyonu</td><td class="fields-list">Kullanım süresi (wear-time)</td><td class="fields-list">Dahil</td></tr>
+            <tr><td class="entity">Alışkanlık Kırıcı Aparey</td><td class="fields-list">Parmak emme, dil itimi</td><td class="fields-list">Randevu, düşük sıklık</td><td class="fields-list">Dahil</td></tr>
+            <tr><td class="entity">Boşluk Tutucu</td><td class="fields-list">Süt dişi erken kaybı</td><td class="fields-list">Uzun aralıklı kontrol (3–6 ay)</td><td class="fields-list">Dahil</td></tr>
+            <tr><td class="entity">Miyofonksiyonel Terapi</td><td class="fields-list">Tamamlayıcı, ana vakaya bağlı</td><td class="fields-list">Egzersiz günlüğü</td><td class="fields-list">Dahil</td></tr>
+            <tr><td class="entity">Ortho-Restoratif (yetişkin)</td><td class="fields-list">Protez/implant öncesi minör hareket</td><td class="fields-list">Randevu, kısa süreli</td><td class="fields-list">Dahil</td></tr>
+            <tr><td class="entity">Kısa Süreli Ortodontik Tedavi</td><td class="fields-list">Sınırlı/estetik amaçlı yetişkin</td><td class="fields-list">Randevu — dar kapsamlı, kısa planlı sabit tedavi</td><td class="fields-list">Dahil</td></tr>
+            <tr><td class="entity">Yarık Damak-Dudak (NAM)</td><td class="fields-list">Yenidoğan</td><td class="fields-list">Yoğun haftalık aktivasyon</td><td class="fields-list">Kapsam dışı</td></tr>
+            <tr><td class="entity">Uyku Apnesi Apareyi</td><td class="fields-list">Yetişkin, OSA</td><td class="fields-list">Kullanım süresi + uyku verisi</td><td class="fields-list">Kapsam dışı</td></tr>
+          </table>
+        </div>
+        <div class="card" style="margin-top:1.2rem;">
+          <h3>Mimari Karar</h3>
+          <p style="margin:0;color:var(--ink-muted);">Her tedavi tipi ortak bir <strong>TreatmentTrack</strong> soyutlaması üzerinden modellenir. Randevuya bağlı ilerleme (<code>AdjustmentVisit</code>) ve randevu dışı ilerleme (<code>ActivationLog</code> — vida turu, kullanım süresi, egzersiz tekrarı) aynı zaman çizelgesinde farklı satır tipleri olarak görünür. Yeni bir tedavi tipi eklemek şema değişikliği değil, yeni bir <code>trackType</code> değeri gerektirir — bu yüzden yukarıdaki liste büyüyebilir.</p>
+        </div>
+      </section>
+
+      <section class="phase" id="special">
+        <div class="phase-head">
+          <div class="eyebrow">Fazlar Arası</div>
+          <h2>Özel Süreçler</h2>
+          <p class="lede">Bunlar ayrı bir "faz" değil, yukarıdaki akışın içine her an girebilecek dallanmalardır — sistemin bunları ana zaman çizelgesini bozmadan kaydedebilmesi gerekir.</p>
+        </div>
+        <div class="callout-grid">
+          <div class="callout">
+            <div class="eyebrow">Acil Durum</div>
+            <p>Braket düşmesi, tel batması, aligner kırılması. Randevu dışı, hızlı slot gerektirir; Faz 05 zaman çizelgesine "acil" etiketiyle düşer.</p>
+          </div>
+          <div class="callout">
+            <div class="eyebrow">Büyüme Takibi</div>
+            <p>8–14 yaş arası hastalarda el-bilek röntgeniyle iskelet yaşı izlenir; büyüme atılımı zamanlamasına göre fonksiyonel aparey planlanır.</p>
+          </div>
+          <div class="callout">
+            <div class="eyebrow">Cerrahi Ortodonti</div>
+            <p>Şiddetli iskelet uyumsuzluğunda: önce dekompanzasyon ortodontisi, sonra ortognatik cerrahi, sonra post-cerrahi bitirme. Çene cerrahıyla koordinasyon kaydı gerekir.</p>
+          </div>
+          <div class="callout">
+            <div class="eyebrow">Nüks / Re-tedavi</div>
+            <p>Retansiyon disiplini bozulursa nüks olabilir; kısa süreli "touch-up" tedavisi ayrı bir mini-vaka olarak açılabilmeli.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="phase" id="entities">
+        <div class="phase-head">
+          <div class="eyebrow">Sistem</div>
+          <h2>Veri Modeli Özeti</h2>
+          <p class="lede">Yukarıdaki fazların veri tabanına indirgenmiş hâli. Bu tablo, mevcut hasta/randevu/finans şemasının üzerine eklenecek ortodonti-özel varlıkları listeler.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="entities">
+            <tr><th>Varlık</th><th>Karşılık Geldiği Faz</th><th>Anahtar Alanlar</th></tr>
+            <tr><td class="entity">OrthoCase</td><td>01</td><td class="fields-list">hastaId, baslangicTarihi, durum (aktif/tamamlandı/retansiyonda), sorumluDoktor</td></tr>
+            <tr><td class="entity">Diagnosis</td><td>02</td><td class="fields-list">iskeletSinifi, overjet, overbite, capraskurluk, sefalometrikDegerler (JSON), boltonAnalizi, haysNanceAnalizi</td></tr>
+            <tr><td class="entity">OrthoRecordSet</td><td>02, 07</td><td class="fields-list">tip (foto/panoramik/sefalometrik/CBCT/STL), tarih, fazEtiketi, dosyaReferansı</td></tr>
+            <tr><td class="entity">TreatmentPlan</td><td>03</td><td class="fields-list">apareyTipi (bkz. Ek Tedavi Tipleri), tarifeProsedurId, cekimKarari, tahminiSure, tahminiMaliyet, onayDurumu</td></tr>
+            <tr><td class="entity">TariffProcedure</td><td>03, Finans</td><td class="fields-list">kod, ad, kategori (sabit-zorluk/rme-zorluk/aligner-kademe/fonksiyonel/hareketli-aparey/kisa-sureli/ek-prosedur), fiyat, arkKapsami (tek/çift), birim (vaka/vida-başına)</td></tr>
+            <tr><td class="entity">TreatmentTrack</td><td>04–08</td><td class="fields-list">trackType (sabit/aligner/rpe/headgear/habit/space-maintainer/myofunctional/ortho-restorative/kisa-sureli), baslangicTarihi, durum</td></tr>
+            <tr><td class="entity">ApplianceRecord</td><td>04, 07</td><td class="fields-list">tip, yerlestirmeTarihi, cikarmaTarihi, ust/altArk, braketPozisyonReferansi</td></tr>
+            <tr><td class="entity">AdjustmentVisit</td><td>05</td><td class="fields-list">tarih, telBoyutu, elastikTipi, iprYapildi, uyumNotu, sonrakiAralik</td></tr>
+            <tr><td class="entity">ActivationLog</td><td>05</td><td class="fields-list">trackId, tarih, tur (aktivasyon/kullanım-süresi/egzersiz), deger (vida turu, saat, tekrar), not</td></tr>
+            <tr><td class="entity">AlignerSet</td><td>05</td><td class="fields-list">setNo, teslimTarihi, refinementMi, uyumYuzdesi</td></tr>
+            <tr><td class="entity">MiniScrewRecord</td><td>05</td><td class="fields-list">bolge, yerlestirmeTarihi, amac, kontrolTarihleri, tarifeProsedurId (vida başına)</td></tr>
+            <tr><td class="entity">GrowthAssessment</td><td>Özel</td><td class="fields-list">elBilekRontgenTarihi, iskeletYasi, buyumeAtilimFazi</td></tr>
+            <tr><td class="entity">RetentionPlan</td><td>08</td><td class="fields-list">retainerTipi, arkKapsami (tek/çift), teslimTarihi, kontrolTakvimi, durum</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <section class="phase" id="screens">
+        <div class="phase-head">
+          <div class="eyebrow">Sistem</div>
+          <h2>Ekran Haritası</h2>
+          <p class="lede">Fazlar boyunca geçen tüm ekranların toplu listesi — arayüz tasarımına başlarken doğrudan sayfa/route listesi olarak kullanılabilir.</p>
+        </div>
+        <div class="screen-groups">
+          <div class="screen-group">
+            <div class="eyebrow">Değerlendirme (Faz 01–03)</div>
+            <div class="screen-cards">
+              <div class="screen-card"><div class="name">Ortodonti Değerlendirme Formu</div><div class="purpose">Klinik bulguların yapılandırılmış girişi</div></div>
+              <div class="screen-card"><div class="name">Kayıt Galerisi</div><div class="purpose">Foto/röntgen/STL yükleme ve fazlara göre arşivleme</div></div>
+              <div class="screen-card"><div class="name">Sefalometrik Analiz Girişi</div><div class="purpose">Açısal ölçüm tablosu</div></div>
+              <div class="screen-card"><div class="name">Tedavi Planı Oluşturucu</div><div class="purpose">Aparey tipi, çekim kararı, süre/maliyet</div></div>
+              <div class="screen-card"><div class="name">Vaka Sunumu / Onam Ekranı</div><div class="purpose">Seçenek karşılaştırma + dijital onam</div></div>
+            </div>
+          </div>
+          <div class="screen-group">
+            <div class="eyebrow">Aktif Tedavi (Faz 04–06)</div>
+            <div class="screen-cards">
+              <div class="screen-card"><div class="name">Aparey Yerleştirme Kaydı</div><div class="purpose">İlk aparey/tel/set bilgisi</div></div>
+              <div class="screen-card"><div class="name">Aktif Tedavi Zaman Çizelgesi</div><div class="purpose">Tel/plak geçmişinin kronolojik görünümü</div></div>
+              <div class="screen-card"><div class="name">Randevu Ayar Formu</div><div class="purpose">Her ziyarette doldurulan hızlı kayıt</div></div>
+              <div class="screen-card"><div class="name">Uyum Takibi</div><div class="purpose">Aligner wear-time / tracking göstergesi</div></div>
+              <div class="screen-card"><div class="name">Mini Vida Takibi</div><div class="purpose">TAD kayıt ve kontrol geçmişi</div></div>
+              <div class="screen-card"><div class="name">Aktivasyon Günlüğü</div><div class="purpose">Randevu dışı ilerleme — genişletme vidası turu, headgear kullanım süresi, miyofonksiyonel egzersiz tekrarı</div></div>
+              <div class="screen-card"><div class="name">Bitirme Kontrol Listesi</div><div class="purpose">Çıkarma öncesi son ayar checklist'i</div></div>
+            </div>
+          </div>
+          <div class="screen-group">
+            <div class="eyebrow">Kapanış &amp; Takip (Faz 07–08)</div>
+            <div class="screen-cards">
+              <div class="screen-card"><div class="name">Öncesi/Sonrası Görüntüleyici</div><div class="purpose">Faz 02 ve 07 kayıtlarının yan yana karşılaştırması</div></div>
+              <div class="screen-card"><div class="name">Retansiyon Takvimi</div><div class="purpose">Otomatik hatırlatmalı kontrol planı</div></div>
+              <div class="screen-card"><div class="name">Retainer Durum Kartı</div><div class="purpose">Yenileme / kayıp-kırık geçmişi</div></div>
+              <div class="screen-card"><div class="name">Hasta Tedavi Zaman Tüneli</div><div class="purpose">Tüm fazları tek ekranda özetleyen üst-düzey görünüm — hasta dosyasına yeni bir "Ortodonti" sekmesi olarak eklenir</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="phase" id="tariff">
+        <div class="phase-head">
+          <div class="eyebrow">Sistem · Klinik Tarife Verisinden Türetildi</div>
+          <h2>Tarife &amp; Zorluk Seviyeleri</h2>
+          <p class="lede">Aşağıdaki kademeler gerçek bir klinik fiyat listesinden derlendi. Sabit tedavi, RME ve Invisalign'ın kendi içinde zorluk/kapsam seviyeleri var — bunlar sadece fiyatı değil, Faz 03'teki tedavi planı ekranında hangi seçeneğin sunulacağını da belirler. Seviye seçimi rastgele değil: Faz 02'de toplanan <code>capraskurluk</code>, <code>acikKapanis/derinKapanis</code>, gömülü diş bulguları gibi tanı verilerinden türetilir — bu yüzden Diagnosis ve TreatmentPlan doğrudan bağlantılı olmalı. Katalog, Pulpax'ta zaten var olan genel <strong>Tarifeler</strong> modülüne ortodonti-özel prosedür kodları olarak eklenir; ayrı bir finans sistemi kurulmaz.</p>
+        </div>
+
+        <div class="card">
+          <h3>Sabit Tedavi — 5 Zorluk Seviyesi</h3>
+          <div class="table-wrap">
+            <table class="fields">
+              <tr><th>Seviye</th><th>Klinik Kriter</th></tr>
+              <tr><td class="field">1</td><td>Hafif çapraşıklık</td></tr>
+              <tr><td class="field">2</td><td>Çekim kararı / border vakada lastikle boşluk kapatma</td></tr>
+              <tr><td class="field">3</td><td>Openbite, şiddetli deepbite veya unilateral gömülü diş</td></tr>
+              <tr><td class="field">4</td><td>Bilateral gömülü diş</td></tr>
+              <tr><td class="field">5</td><td>Gömülü diş + şiddetli yer darlığı bir arada</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="panels" style="margin-top:1.2rem;">
+          <div class="card">
+            <h3>RME — 3 Zorluk Seviyesi</h3>
+            <ul>
+              <li><strong>1. Seviye</strong> — standart, komplikasyonsuz genişletme</li>
+              <li><strong>2. Seviye</strong> — ek mekanik gereksinimi olan orta karmaşıklık</li>
+              <li><strong>Komplike</strong> — cerrahi destekli (SARPE) veya FM (yüz maskesi) ile birlikte planlanan vaka</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Invisalign — 3 Kapsam Kademesi</h3>
+            <ul>
+              <li><strong>Lite</strong> — az sayıda plak, hafif çapraşıklık/nüks vakaları</li>
+              <li><strong>Moderate</strong> — orta sayıda plak, orta karmaşıklık</li>
+              <li><strong>Comprehensive</strong> — yüksek/sınırsız plak, tam kapsamlı vaka</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="panels" style="margin-top:1.2rem;">
+          <div class="card">
+            <h3>Fonksiyonel Apareyler</h3>
+            <ul>
+              <li><strong>FM (Yüz Maskesi)</strong> — Class III büyüme modifikasyonu, genelde RME ile birlikte protraksiyon</li>
+              <li><strong>Twinblock</strong> — Class II büyüme modifikasyonu, iki parçalı hareketli aparey</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Ark Kapsamına Göre Fiyatlanan Kalemler</h3>
+            <ul>
+              <li>Retainer teli — tek çene / çift çene</li>
+              <li>Hareketli aparey — tek çene / çift çene</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:1.2rem;">
+          <h3>Ek Prosedürler &amp; Sınırlı Tedavi</h3>
+          <ul>
+            <li><strong>Aparey Tamir</strong> — kırık/düşmüş aparey onarımı; Faz 05'teki acil randevuyu otomatik olarak bu prosedür koduna bağlar</li>
+            <li><strong>Mini Vida</strong> — vida başına ücretlendirilir; her <code>MiniScrewRecord</code> kaydı bir fatura kalemine karşılık gelir</li>
+            <li><strong>Kısa Süreli Ortodontik Tedavi</strong> — sınırlı/estetik amaçlı, dar kapsamlı ve kısa süreli sabit tedavi; <code>TreatmentTrack</code> üzerinde ayrı bir <code>trackType</code> değeridir</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="phase" id="market">
+        <div class="phase-head">
+          <div class="eyebrow">Sistem</div>
+          <h2>Piyasa Konumlandırması</h2>
+          <p class="lede">Türkiye pazarındaki mevcut ürünlere bakıldığında ortodonti tarafı ya genel bir klinik yazılımına eklenmiş dar bir modül, ya da tek işlevli bağımsız bir araç olarak var — uçtan uca birleşik bir platform boşluğu duruyor.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="entities">
+            <tr><th>Ürün</th><th>Tür</th><th>Kapsam</th><th>Bu Sistemdeki Karşılığı</th></tr>
+            <tr>
+              <td class="entity">Turcasoft Clinica<br>Ortodonti Modülü</td>
+              <td class="fields-list">Genel klinik yazılımına ek modül</td>
+              <td class="fields-list">Braket pozisyonu, Bolton/Hays-Nance analizi, evre bazlı görsel arşiv</td>
+              <td class="fields-list">Faz 02 Model Analizi + Faz 04 braket pozisyon kaydı + Kayıt Galerisi</td>
+            </tr>
+            <tr>
+              <td class="entity">OrthoKit<br>(Evolved Orthodontics)</td>
+              <td class="fields-list">Tekil uygulama — Mac/iPad/iPhone</td>
+              <td class="fields-list">Hasta kartı + başlangıç/kontrol fotoğrafı + röntgen arşivi</td>
+              <td class="fields-list">Kayıt Galerisi'nin bir alt kümesi; randevu/finans/zaman çizelgesi kapsam dışı</td>
+            </tr>
+            <tr>
+              <td class="entity">AudaxCeph<br>(Novasoft)</td>
+              <td class="fields-list">Bağımsız masaüstü aracı</td>
+              <td class="fields-list">Sadece sefalometrik iz düşürme ve analiz</td>
+              <td class="fields-list">Sefalometrik Analiz Girişi ekranının olası entegrasyon/veri kaynağı</td>
+            </tr>
+            <tr>
+              <td class="entity">OrthoTrack<br>(Play Store)</td>
+              <td class="fields-list">Mobil uygulama</td>
+              <td class="fields-list">İçerik doğrulanamadı — isimden hasta tarafı uyum/ilerleme takibi olduğu tahmin ediliyor</td>
+              <td class="fields-list">Doğrulanmadı; olası karşılığı Uyum Takibi ekranının hasta/mobil tarafı</td>
+            </tr>
+            <tr>
+              <td class="entity">NovaWeb<br>(Novasoft)</td>
+              <td class="fields-list">Genel diş kliniği SaaS</td>
+              <td class="fields-list">Randevu, finans, çoklu şube, eNabız — ortodontiye özel değil</td>
+              <td class="fields-list">Pulpax'ın da içinde bulunduğu genel kategori; bu doküman tam olarak eksik kalan katmanı tanımlıyor</td>
+            </tr>
+          </table>
+        </div>
+      </section>
+
+      <section class="phase" id="diff">
+        <div class="phase-head">
+          <div class="eyebrow">Neden Ayrı Bir Sistem</div>
+          <h2>Farklılaştırıcı Özellikler</h2>
+          <p class="lede">Genel diş kliniği yazılımları randevu ve dosya tutar; aşağıdakiler ise sadece ortodontiye özgü ilerleme mantığından doğar ve piyasadaki standart ürünlerde genelde yoktur.</p>
+        </div>
+        <div class="diff-list">
+          <div class="diff-row">
+            <div class="label">İlerleme modeli</div>
+            <div class="generic">Randevu listesi + serbest metin not</div>
+            <div class="ours">Faz-bazlı zaman çizelgesi (tel/plak geçmişi, IPR log, elastik reçetesi)</div>
+          </div>
+          <div class="diff-row">
+            <div class="label">Tanı verisi</div>
+            <div class="generic">Serbest metin muayene notu</div>
+            <div class="ours">Yapılandırılmış sefalometrik analiz + zaman içinde karşılaştırma</div>
+          </div>
+          <div class="diff-row">
+            <div class="label">Hasta uyumu</div>
+            <div class="generic">Takip edilmez</div>
+            <div class="ours">Aligner wear-time / tracking göstergesi</div>
+          </div>
+          <div class="diff-row">
+            <div class="label">Görsel kanıt</div>
+            <div class="generic">Dosyaya yüklenmiş dağınık fotoğraflar</div>
+            <div class="ours">Standart poz setiyle otomatik öncesi/sonrası eşleştirme</div>
+          </div>
+          <div class="diff-row">
+            <div class="label">Büyüme çağı hastalar</div>
+            <div class="generic">Yaş bilgisi dışında ayrım yok</div>
+            <div class="ours">İskelet yaşı + büyüme atılımı takibiyle zamanlanan fonksiyonel tedavi</div>
+          </div>
+          <div class="diff-row">
+            <div class="label">Tedavi sonu</div>
+            <div class="generic">Dosya kapanır</div>
+            <div class="ours">Retansiyon, kendi takvimi olan ayrı ve kalıcı bir faz</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="note">
+    Bu doküman klinik akışı ve ekran yapısını tanımlar; veritabanı şeması, API sözleşmesi ve mevcut CRM/finans modülleriyle entegrasyon noktaları bir sonraki adımda ayrıca çıkarılmalıdır.
+  </footer>
+
+</div>
