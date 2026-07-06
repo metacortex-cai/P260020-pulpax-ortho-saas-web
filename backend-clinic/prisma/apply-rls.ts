@@ -45,7 +45,8 @@ async function main() {
     'patient_documents',
     'labs',
     'expense_categories',
-    'expenses'
+    'expenses',
+    'ortho_cases'
   ];
 
   for (const table of tablesWithClinicId) {
@@ -155,6 +156,62 @@ async function main() {
         SELECT 1 FROM "patients"
         WHERE "patients".id = patient_id
           AND "patients".clinic_id = NULLIF(current_setting('app.current_clinic_id', true), '')
+      ));
+    `);
+  }
+
+  // 7. Ortodonti alt tabloları -> ortho_cases (case_id üzerinden)
+  const orthoCaseChildTables = [
+    'ortho_diagnoses',
+    'ortho_record_sets',
+    'ortho_treatment_tracks',
+    'ortho_mini_screw_records',
+    'ortho_growth_assessments',
+    'ortho_retention_plans',
+  ];
+
+  for (const table of orthoCaseChildTables) {
+    if (!(await tableExists(table))) {
+      console.log(`- ${table} tablosu bulunamadı, atlanıyor...`);
+      continue;
+    }
+
+    console.log(`- ${table} tablosu için RLS aktif ediliyor...`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY;`);
+    await prisma.$executeRawUnsafe(`DROP POLICY IF EXISTS tenant_isolation ON "${table}";`);
+    await prisma.$executeRawUnsafe(`
+      CREATE POLICY tenant_isolation ON "${table}"
+      USING (EXISTS (
+        SELECT 1 FROM "ortho_cases"
+        WHERE "ortho_cases".id = case_id
+          AND "ortho_cases".clinic_id = NULLIF(current_setting('app.current_clinic_id', true), '')
+      ));
+    `);
+  }
+
+  // 8. Ortodonti track alt tabloları -> ortho_treatment_tracks (track_id üzerinden)
+  const orthoTrackChildTables = [
+    'ortho_adjustment_visits',
+    'ortho_activation_logs',
+    'ortho_aligner_sets',
+  ];
+
+  for (const table of orthoTrackChildTables) {
+    if (!(await tableExists(table))) {
+      console.log(`- ${table} tablosu bulunamadı, atlanıyor...`);
+      continue;
+    }
+
+    console.log(`- ${table} tablosu için RLS aktif ediliyor...`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY;`);
+    await prisma.$executeRawUnsafe(`DROP POLICY IF EXISTS tenant_isolation ON "${table}";`);
+    await prisma.$executeRawUnsafe(`
+      CREATE POLICY tenant_isolation ON "${table}"
+      USING (EXISTS (
+        SELECT 1 FROM "ortho_treatment_tracks"
+        WHERE "ortho_treatment_tracks".id = track_id
       ));
     `);
   }
