@@ -22,15 +22,18 @@ export class UsersService {
       throw new BadRequestException('Bu e-posta adresi zaten kullanımda.');
     }
 
-    let employee: any = null;
+    // NOT: dto.employeeId alan adı geriye dönük uyumluluk için korunuyor;
+    // hedef model artık tenant DB'deki Doctor (bkz. tenant.prisma) — Employee/İK
+    // modülü kaldırıldı (scope-reduction kararı).
+    let doctor: any = null;
     if (dto.employeeId) {
       const tenantClient = await this.tenantPrisma.getClient();
-      employee = await tenantClient.employee.findFirst({ where: { id: dto.employeeId, clinicId } });
-      if (!employee) {
-        throw new NotFoundException(`Personel (${dto.employeeId}) bulunamadı.`);
+      doctor = await tenantClient.doctor.findFirst({ where: { id: dto.employeeId, clinicId } });
+      if (!doctor) {
+        throw new NotFoundException(`Hekim (${dto.employeeId}) bulunamadı.`);
       }
-      if (employee.userId) {
-        throw new BadRequestException('Bu personelin zaten bir kullanıcı hesabı var.');
+      if (doctor.userId) {
+        throw new BadRequestException('Bu hekimin zaten bir kullanıcı hesabı var.');
       }
     }
 
@@ -61,9 +64,9 @@ export class UsersService {
       return user;
     });
 
-    if (employee) {
+    if (doctor) {
       const tenantClient = await this.tenantPrisma.getClient();
-      await tenantClient.employee.update({ where: { id: employee.id }, data: { userId: user.id } });
+      await tenantClient.doctor.update({ where: { id: doctor.id }, data: { userId: user.id } });
     }
 
     if (!hashedPassword) {

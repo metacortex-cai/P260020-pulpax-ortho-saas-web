@@ -1,10 +1,10 @@
 /**
  * Tüm hastalara ait:
  * - TreatmentPlan + TreatmentItem kayıtlarını
- * - Protocol kayıtlarını
  * - PaymentDistribution + Payment kayıtlarını
- * - PrimRecord kayıtlarını
  * siler ve hasta cari borç/avans bakiyelerini sıfırlar.
+ * (PrimRecord adımı kaldırıldı — prim/komisyon modeli Employee/İK modülüyle
+ * birlikte kaldırıldı, bkz. scope-reduction kararı.)
  */
 import { PrismaClient } from '@prisma/client';
 import { PrismaClient as TenantPrismaClient } from '../src/prisma/tenant-client';
@@ -21,37 +21,27 @@ async function cleanTenant(clinicName: string, dbUrl: string) {
   try {
     await db.$connect();
 
-    // 1. PrimRecord
-    const primCount = await db.primRecord.count();
-    await db.primRecord.deleteMany({});
-    console.log(`  ✓ PrimRecord silindi: ${primCount} kayıt`);
-
-    // 2. Protocol
-    const protocolCount = await db.protocol.count();
-    await db.protocol.deleteMany({});
-    console.log(`  ✓ Protocol silindi: ${protocolCount} kayıt`);
-
-    // 3. PaymentDistribution
+    // 1. PaymentDistribution
     const distCount = await db.paymentDistribution.count();
     await db.paymentDistribution.deleteMany({});
     console.log(`  ✓ PaymentDistribution silindi: ${distCount} kayıt`);
 
-    // 4. Payment
+    // 2. Payment
     const paymentCount = await db.payment.count();
     await db.payment.deleteMany({});
     console.log(`  ✓ Payment silindi: ${paymentCount} kayıt`);
 
-    // 5. TreatmentItem
+    // 3. TreatmentItem
     const itemCount = await db.treatmentItem.count();
     await db.treatmentItem.deleteMany({});
     console.log(`  ✓ TreatmentItem silindi: ${itemCount} kayıt`);
 
-    // 6. TreatmentPlan
+    // 4. TreatmentPlan
     const planCount = await db.treatmentPlan.count();
     await db.treatmentPlan.deleteMany({});
     console.log(`  ✓ TreatmentPlan silindi: ${planCount} kayıt`);
 
-    // 7. Hasta borçlarını sıfırla
+    // 5. Hasta borçlarını sıfırla
     const updated = await db.patient.updateMany({
       data: { totalDebt: 0, advance: 0 },
     });

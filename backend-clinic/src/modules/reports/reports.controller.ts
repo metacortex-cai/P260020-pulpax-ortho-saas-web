@@ -24,20 +24,4 @@ export class ReportsController {
   getTreatmentPerformance() {
     return this.reportsService.getTreatmentPerformance();
   }
-
-  @Get('doctors/performance')
-  getDoctorPerformance(
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string
-  ) {
-    return this.reportsService.getDoctorPerformance(startDate, endDate);
-  }
-
-  @Get('labs')
-  getLabReport(
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string
-  ) {
-    return this.reportsService.getLabReport(startDate, endDate);
-  }
 }

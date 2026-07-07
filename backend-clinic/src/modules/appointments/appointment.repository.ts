@@ -9,7 +9,7 @@ export class AppointmentRepository extends TenantBaseRepository<any, any, any> {
   }
 
   /**
-   * doctorId tenant DB'deki Employee tablosuna işaret eder (bkz. tenant.prisma
+   * doctorId tenant DB'deki Doctor tablosuna işaret eder (bkz. tenant.prisma
    * Appointment.doctor ilişkisi); Prisma bu ilişkiyi include ile çözemiyor çünkü
    * TenantBaseRepository dinamik/çok-tenantlı bir client kullanıyor, bu yüzden
    * hekim bilgisi burada ayrı bir sorgu ile manuel olarak birleştiriliyor.
@@ -21,7 +21,7 @@ export class AppointmentRepository extends TenantBaseRepository<any, any, any> {
     }
 
     const tenantDb = await this.getTenantDb();
-    const doctors: { id: string; firstName: string; lastName: string }[] = await tenantDb.employee.findMany({
+    const doctors: { id: string; firstName: string; lastName: string }[] = await tenantDb.doctor.findMany({
       where: { id: { in: doctorIds } },
       select: { id: true, firstName: true, lastName: true },
     });
@@ -38,7 +38,7 @@ export class AppointmentRepository extends TenantBaseRepository<any, any, any> {
 
   async getDoctorName(doctorId: string): Promise<string | null> {
     const tenantDb = await this.getTenantDb();
-    const doctor = await tenantDb.employee.findUnique({
+    const doctor = await tenantDb.doctor.findUnique({
       where: { id: doctorId },
       select: { firstName: true, lastName: true },
     });
@@ -80,26 +80,6 @@ export class AppointmentRepository extends TenantBaseRepository<any, any, any> {
     }
 
     return delegate.findFirst({ where });
-  }
-
-  /**
-   * Hekimin belirtilen tarih aralığında izni olup olmadığını kontrol eder.
-   */
-  async findActiveLeave(
-    clinicId: string,
-    doctorId: string,
-    startOn: Date,
-    endOn: Date,
-  ) {
-    const tenantDb = await this.tenantPrisma.getClient();
-    return tenantDb.employeeLeave.findFirst({
-      where: {
-        clinicId,
-        employeeId: doctorId,
-        startAt: { lte: startOn },
-        endAt: { gte: endOn },
-      },
-    });
   }
 
   /**

@@ -26,24 +26,15 @@ async function main() {
     'dental_chairs',
     'tariffs',
     'treatment_plans',
-    'employee_leaves',
-    'employee_work_hours',
+    'doctors',
     'consent_logs',
     'audit_logs',
     'sms_purchases',
     'clinic_invoices',
-    'employee_contracts',
-    'prim_records',
     'clinic_integrations',
     'parasut_sync_logs',
     'notifications',
-    'warehouses',
-    'inventory_items',
-    'inventory_stocks',
-    'inventory_batches',
-    'stock_movements',
     'patient_documents',
-    'labs',
     'expense_categories',
     'expenses',
     'ortho_cases'
@@ -110,36 +101,6 @@ async function main() {
       USING (EXISTS (
         SELECT 1 FROM "payments"
         WHERE "payments".id = payment_id
-      ));
-    `);
-  }
-
-  // 4. protocols -> treatment_items
-  if (await tableExists('protocols')) {
-    console.log('- protocols tablosu için RLS aktif ediliyor...');
-    await prisma.$executeRawUnsafe(`ALTER TABLE "protocols" ENABLE ROW LEVEL SECURITY;`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "protocols" FORCE ROW LEVEL SECURITY;`);
-    await prisma.$executeRawUnsafe(`DROP POLICY IF EXISTS tenant_isolation ON "protocols";`);
-    await prisma.$executeRawUnsafe(`
-      CREATE POLICY tenant_isolation ON "protocols"
-      USING (EXISTS (
-        SELECT 1 FROM "treatment_items"
-        WHERE "treatment_items".id = treatment_item_id
-      ));
-    `);
-  }
-
-  // 5. lab_orders -> treatment_items
-  if (await tableExists('lab_orders')) {
-    console.log('- lab_orders tablosu için RLS aktif ediliyor...');
-    await prisma.$executeRawUnsafe(`ALTER TABLE "lab_orders" ENABLE ROW LEVEL SECURITY;`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "lab_orders" FORCE ROW LEVEL SECURITY;`);
-    await prisma.$executeRawUnsafe(`DROP POLICY IF EXISTS tenant_isolation ON "lab_orders";`);
-    await prisma.$executeRawUnsafe(`
-      CREATE POLICY tenant_isolation ON "lab_orders"
-      USING (EXISTS (
-        SELECT 1 FROM "treatment_items"
-        WHERE "treatment_items".id = treatment_item_id
       ));
     `);
   }

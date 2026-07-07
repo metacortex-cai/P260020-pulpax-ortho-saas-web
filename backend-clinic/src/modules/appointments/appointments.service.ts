@@ -71,9 +71,8 @@ export class AppointmentsService {
 
   /**
    * LLD 2.3: Çakışma Kontrolü
-   * 1. Hekimin izin günü mü? (sert engel)
-   * 2. Hekimin aynı saatte başka aktif randevusu var mı? (yumuşak — onayla geçilebilir)
-   * 3. Seçili ünit aynı saatte başka bir randevuda mı? (sert engel — fiziksel kısıt)
+   * 1. Hekimin aynı saatte başka aktif randevusu var mı? (yumuşak — onayla geçilebilir)
+   * 2. Seçili ünit aynı saatte başka bir randevuda mı? (sert engel — fiziksel kısıt)
    */
   /**
    * @param tx Transaction içindeki Prisma client'ı — çağıran taraf bir
@@ -93,25 +92,7 @@ export class AppointmentsService {
     excludeId?: string,
     force = false,
   ): Promise<void> {
-    // 1. İzin kontrolü — yalnızca ONAYLANMIŞ izinler randevuyu engeller (ADR-003 Faz 2),
-    // aralık kesişimi (overlap) mantığıyla: leave.startAt < endOn && leave.endAt > startOn
-    const activeLeave = await tx.employeeLeave.findFirst({
-      where: {
-        clinicId,
-        employeeId: doctorId,
-        status: 'APPROVED',
-        startAt: { lt: endOn },
-        endAt: { gt: startOn },
-      },
-    });
-
-    if (activeLeave) {
-      throw new ConflictException(
-        'Seçtiğiniz tarihte hekim izinlidir. Randevu oluşturulamaz.',
-      );
-    }
-
-    // 2. Çakışan randevu kontrolü (Doktor) — artık sert engel değil: kullanıcı
+    // 1. Çakışan randevu kontrolü (Doktor) — artık sert engel değil: kullanıcı
     // çakışan hasta bilgilerini görüp onaylarsa (force:true) aynı saat dilimine
     // ikinci bir randevu eklenebilir.
     if (!force) {
@@ -145,7 +126,7 @@ export class AppointmentsService {
       }
     }
 
-    // 3. Çakışan randevu kontrolü (Ünit) — fiziksel kısıt olduğu için sert engel, force ile atlanamaz
+    // 2. Çakışan randevu kontrolü (Ünit) — fiziksel kısıt olduğu için sert engel, force ile atlanamaz
     if (chairId) {
       const chairWhere: any = {
         clinicId,
@@ -166,19 +147,16 @@ export class AppointmentsService {
     }
   }
 
-  private formatTimeOfDay(d: Date): string {
-    return getClinicDateParts(d).hhmm;
-  }
-
   /**
-   * Yumuşak (bloke etmeyen) mesai saati kontrolü — spec §2.5.2/§10.8.
-   * Mesai tanımı hiç yoksa "tüm saatler açık" kabul edilir, uyarı üretilmez.
+   * Mesai saati kontrolü — İK/personel mesai modülü kaldırıldığı için (bkz.
+   * scope-reduction kararı) artık hiçbir mesai tanımı yok; her zaman "mesai
+   * dışı değil" döner. İmza/endpoint geriye dönük uyumluluk için korunuyor.
    */
   async checkWorkHours(
-    clinicId: string,
-    employeeId: string,
-    startOn: Date,
-    endOn: Date,
+    _clinicId: string,
+    _employeeId: string,
+    _startOn: Date,
+    _endOn: Date,
   ): Promise<{
     outsideWorkHours: boolean;
     employeeName?: string | null;
@@ -186,40 +164,7 @@ export class AppointmentsService {
     workEnd?: string | null;
     message?: string;
   }> {
-    const tenantDb = await this.repo.getTenantDb();
-    const dayOfWeek = getClinicDateParts(startOn).dayOfWeek;
-    const wh = await tenantDb.employeeWorkHour.findFirst({
-      where: { clinicId, employeeId, dayOfWeek },
-    });
-
-    if (!wh) {
-      return { outsideWorkHours: false };
-    }
-
-    const startTime = this.formatTimeOfDay(startOn);
-    const endTime = this.formatTimeOfDay(endOn);
-    const isOutside =
-      !wh.isWorking ||
-      !wh.startTime ||
-      !wh.endTime ||
-      startTime < wh.startTime ||
-      endTime > wh.endTime;
-
-    if (!isOutside) {
-      return { outsideWorkHours: false };
-    }
-
-    const employeeName = await this.repo.getDoctorName(employeeId);
-    const who = employeeName || 'Hekim';
-    return {
-      outsideWorkHours: true,
-      employeeName,
-      workStart: wh.isWorking ? wh.startTime : null,
-      workEnd: wh.isWorking ? wh.endTime : null,
-      message: wh.isWorking
-        ? `${who} mesai saatleri dışında randevu.`
-        : `${who} bu gün çalışmıyor.`,
-    };
+    return { outsideWorkHours: false };
   }
 
   /**
@@ -433,7 +378,7 @@ export class AppointmentsService {
 
   /**
    * Randevu durumunu günceller.
-   * COMPLETED → AppointmentCompletedEvent fırlatır (PrimService dinler)
+   * COMPLETED → AppointmentCompletedEvent fırlatır
    * CANCELLED → AppointmentCancelledEvent fırlatır
    * CONFIRMED → AppointmentConfirmedEvent fırlatır (RemindersService gelmedi kontrolü zamanlar)
    * POSTPONED → yeni randevu oluşturan ayrı bir akış (bkz. postpone())
@@ -532,8 +477,10 @@ export class AppointmentsService {
 
   /**
    * Mini takvim doluluk özeti (spec §8.3): ay içindeki her gün için randevu
-   * sayısı ve seçili hekimlerin o günkü toplam mesai (kapasite) dakikası.
-   * Doluluk % = frontend'de total*ortalamaSüre/capacityMinutes olarak hesaplanır.
+   * sayısı. Mesai (kapasite) tanımı İK modülüyle birlikte kaldırıldığı için
+   * (bkz. scope-reduction kararı) capacityMinutes her zaman 0 döner —
+   * frontend'de doluluk yüzdesi artık hesaplanamaz, yalnızca günlük randevu
+   * sayısı gösterilir.
    */
   async getOccupancy(clinicId: string, month: string, doctorIds: string[]) {
     const [year, monthNum] = month.split('-').map(Number);
@@ -549,26 +496,12 @@ export class AppointmentsService {
     };
     if (doctorIds.length > 0) appointmentWhere.doctorId = { in: doctorIds };
 
-    const [appointments, workHours] = await Promise.all([
-      tenantDb.appointment.findMany({ where: appointmentWhere, select: { startOn: true } }),
-      doctorIds.length > 0
-        ? tenantDb.employeeWorkHour.findMany({ where: { clinicId, employeeId: { in: doctorIds } } })
-        : Promise.resolve([]),
-    ]);
+    const appointments = await tenantDb.appointment.findMany({ where: appointmentWhere, select: { startOn: true } });
 
     const totalsByDate = new Map<string, number>();
     for (const a of appointments) {
       const key = formatLocalDate(a.startOn);
       totalsByDate.set(key, (totalsByDate.get(key) || 0) + 1);
-    }
-
-    const capacityByDayOfWeek = new Map<number, number>();
-    for (const wh of workHours) {
-      if (!wh.isWorking || !wh.startTime || !wh.endTime) continue;
-      const [sh, sm] = wh.startTime.split(':').map(Number);
-      const [eh, em] = wh.endTime.split(':').map(Number);
-      const minutes = (eh * 60 + em) - (sh * 60 + sm);
-      capacityByDayOfWeek.set(wh.dayOfWeek, (capacityByDayOfWeek.get(wh.dayOfWeek) || 0) + Math.max(minutes, 0));
     }
 
     const days: { date: string; total: number; capacityMinutes: number }[] = [];
@@ -577,7 +510,7 @@ export class AppointmentsService {
       days.push({
         date: key,
         total: totalsByDate.get(key) || 0,
-        capacityMinutes: capacityByDayOfWeek.get(d.getDay()) || 0,
+        capacityMinutes: 0,
       });
     }
 

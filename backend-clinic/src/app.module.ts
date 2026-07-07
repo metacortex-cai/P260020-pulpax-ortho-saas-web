@@ -11,16 +11,14 @@ import { PatientsModule } from './modules/patients/patients.module';
 import { TreatmentsModule } from './modules/treatments/treatments.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
-import { EmployeesModule } from './modules/employees/employees.module';
+import { DoctorsModule } from './modules/doctors/doctors.module';
 import { UsersModule } from './modules/users/users.module';
 import { CurrencyModule } from './modules/currency/currency.module';
 import { MedicationsModule } from './modules/medications/medications.module';
 import { ParasutModule } from './modules/parasut/parasut.module';
 import { AuditModule } from './common/audit/audit.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
-import { InventoryModule } from './modules/inventory/inventory.module';
 import { ReportsModule } from './modules/reports/reports.module';
-import { LabModule } from './modules/lab/lab.module';
 import { SmsModule } from './modules/sms/sms.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
@@ -30,7 +28,6 @@ import { UssModule } from './modules/uss/uss.module';
 import { EreceteModule } from './modules/erecete/erecete.module';
 import { EfaturaModule } from './modules/efatura/efatura.module';
 import { AiRadiologyModule } from './modules/ai/ai-radiology.module';
-import { ProtocolsModule } from './modules/protocols/protocols.module';
 import { OrthodonticsModule } from './modules/orthodontics/orthodontics.module';
 
 
@@ -67,15 +64,13 @@ import { validate } from './common/config/env.validation';
     TreatmentsModule,
     FinanceModule,
     AppointmentsModule,
-    EmployeesModule,
+    DoctorsModule,
     UsersModule,
     CurrencyModule,
     MedicationsModule,
     ParasutModule,
     NotificationsModule,
-    InventoryModule,
     ReportsModule,
-    LabModule,
     SmsModule,
     RemindersModule,
     AuditModule,
@@ -85,7 +80,6 @@ import { validate } from './common/config/env.validation';
     EreceteModule,
     EfaturaModule,
     AiRadiologyModule,
-    ProtocolsModule,
     OrthodonticsModule,
   ],
   controllers: [],

@@ -4,17 +4,17 @@ import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync } from 'fs';
 import { BadRequestException } from '@nestjs/common';
 
-export const EMPLOYEE_PHOTOS_DIR = join(process.cwd(), 'uploads', 'employee-photos');
+export const DOCTOR_PHOTOS_DIR = join(process.cwd(), 'uploads', 'doctor-photos');
 
-if (!existsSync(EMPLOYEE_PHOTOS_DIR)) {
-  mkdirSync(EMPLOYEE_PHOTOS_DIR, { recursive: true });
+if (!existsSync(DOCTOR_PHOTOS_DIR)) {
+  mkdirSync(DOCTOR_PHOTOS_DIR, { recursive: true });
 }
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-export const employeePhotoMulterOptions = {
+export const doctorPhotoMulterOptions = {
   storage: diskStorage({
-    destination: EMPLOYEE_PHOTOS_DIR,
+    destination: DOCTOR_PHOTOS_DIR,
     filename: (_req, file, callback) => {
       callback(null, `${randomUUID()}${extname(file.originalname)}`);
     },

@@ -1,24 +1,22 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TreatmentsService } from './treatments.service';
 import { TreatmentRepository } from './treatment.repository';
-import { PrimService } from '../employees/prim.service';
 import { TenantPrismaService } from '../../prisma/tenant-prisma.service';
 import { AuditLogService } from '../../common/services/audit-log.service';
 
 /**
- * ADR-003 Faz 4 (prim sistemi.md §9.1): Tamamlanmış bir tedavi kaleminin
- * iptali/hekim değişikliği yetkilendirme kurallarını doğrular.
+ * Tamamlanmış bir tedavi kaleminin iptali/hekim değişikliği yetkilendirme
+ * kurallarını doğrular (prim/komisyon sistemi kaldırıldı — bkz. scope-reduction
+ * kararı; bu kalemler artık yalnızca Süper Admin kısıtına tabidir).
  */
-describe('TreatmentsService — İptal Yetkilendirme (ADR-003 Faz 4)', () => {
+describe('TreatmentsService — İptal Yetkilendirme', () => {
   let service: TreatmentsService;
 
   const clinicId = 'clinic-a';
 
   let treatmentItems: any[];
-  let protocols: any[];
-  let primRecords: any[];
   let auditLogs: any[];
 
   function makeMockTx() {
@@ -44,24 +42,6 @@ describe('TreatmentsService — İptal Yetkilendirme (ADR-003 Faz 4)', () => {
           return Promise.resolve({ count: ids.length });
         }),
       },
-      protocol: {
-        deleteMany: jest.fn(({ where }: any) => {
-          protocols = protocols.filter((p) => p.treatmentItemId !== where.treatmentItemId);
-          return Promise.resolve({ count: 1 });
-        }),
-        create: jest.fn(({ data }: any) => {
-          protocols.push(data);
-          return Promise.resolve(data);
-        }),
-      },
-      primRecord: {
-        findFirst: jest.fn(({ where }: any) => {
-          if (where.treatmentItemId?.in) {
-            return Promise.resolve(primRecords.find((p) => where.treatmentItemId.in.includes(p.treatmentItemId)) || null);
-          }
-          return Promise.resolve(primRecords.find((p) => p.treatmentItemId === where.treatmentItemId) || null);
-        }),
-      },
       treatmentPlan: {
         update: jest.fn(() => Promise.resolve({})),
       },
@@ -79,8 +59,6 @@ describe('TreatmentsService — İptal Yetkilendirme (ADR-003 Faz 4)', () => {
       { id: 'item-completed', status: 'COMPLETED', doctorId: 'doctor-1', price: 1000, planId: 'plan-1', plan: { clinicId, patientId: 'patient-1', status: 'ACTIVE' }, paymentDistributions: [] },
       { id: 'item-pending', status: 'PENDING', doctorId: 'doctor-1', price: 500, planId: 'plan-1', plan: { clinicId, patientId: 'patient-1', status: 'ACTIVE' }, paymentDistributions: [] },
     ];
-    protocols = [{ treatmentItemId: 'item-completed', protocolNo: 'X' }];
-    primRecords = [];
     auditLogs = [];
 
     const mockTx = makeMockTx();
@@ -94,7 +72,6 @@ describe('TreatmentsService — İptal Yetkilendirme (ADR-003 Faz 4)', () => {
       providers: [
         TreatmentsService,
         { provide: TreatmentRepository, useValue: {} },
-        { provide: PrimService, useValue: {} },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
         { provide: TenantPrismaService, useValue: { getClient: jest.fn().mockResolvedValue(mockTenantClient) } },
         { provide: AuditLogService, useValue: { log: jest.fn((data: any) => { auditLogs.push(data); return Promise.resolve(); }) } },
@@ -111,18 +88,10 @@ describe('TreatmentsService — İptal Yetkilendirme (ADR-003 Faz 4)', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('Superadmin, primi henüz dağıtılmamış tamamlanmış kalemi iptal edebilir ve audit log yazılır', async () => {
+    it('Superadmin tamamlanmış kalemi iptal edebilir ve audit log yazılır', async () => {
       const result = await service.updateItemStatus('item-completed', clinicId, { status: 'CANCELLED' } as any, 'superadmin-1', 'SUPERADMIN');
       expect(result.status).toBe('CANCELLED');
-      expect(protocols).toHaveLength(0); // protokol iptal edildi
       expect(auditLogs.some((l) => l.action === 'TREATMENT_ITEM_STATUS_ROLLBACK')).toBe(true);
-    });
-
-    it('primi zaten dağıtılmış bir kalemde Superadmin dahi değişiklik YAPAMAZ', async () => {
-      primRecords.push({ id: 'prim-1', treatmentItemId: 'item-completed' });
-      await expect(
-        service.updateItemStatus('item-completed', clinicId, { status: 'CANCELLED' } as any, 'superadmin-1', 'SUPERADMIN'),
-      ).rejects.toThrow(BadRequestException);
     });
 
     it('tamamlanmamış (PENDING) kalemi standart kullanıcı serbestçe iptal edebilir', async () => {
@@ -137,17 +106,10 @@ describe('TreatmentsService — İptal Yetkilendirme (ADR-003 Faz 4)', () => {
       await expect(service.deleteItems(['item-completed'], clinicId, true, 'user-1', 'ADMIN')).rejects.toThrow(ForbiddenException);
     });
 
-    it('Superadmin, primi dağıtılmamış tamamlanmış kalemi silebilir (reallocate=true)', async () => {
+    it('Superadmin tamamlanmış kalemi silebilir (reallocate=true)', async () => {
       const result = await service.deleteItems(['item-completed'], clinicId, true, 'superadmin-1', 'SUPERADMIN');
       expect(result.success).toBe(true);
       expect(auditLogs.some((l) => l.action === 'TREATMENT_ITEMS_DELETED')).toBe(true);
-    });
-
-    it('primi dağıtılmış kalem reallocate=true olsa dahi Superadmin tarafından da SİLİNEMEZ', async () => {
-      primRecords.push({ id: 'prim-1', treatmentItemId: 'item-completed' });
-      await expect(service.deleteItems(['item-completed'], clinicId, true, 'superadmin-1', 'SUPERADMIN')).rejects.toThrow(
-        BadRequestException,
-      );
     });
   });
 

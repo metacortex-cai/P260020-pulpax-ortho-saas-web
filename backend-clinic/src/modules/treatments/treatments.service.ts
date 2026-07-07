@@ -1,8 +1,6 @@
 import { Injectable, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
-import * as crypto from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TreatmentRepository } from './treatment.repository';
-import { PrimService } from '../employees/prim.service';
 import { CreateTreatmentPlanDto } from './dto/create-treatment-plan.dto';
 import { UpdateTreatmentStatusDto } from './dto/update-treatment-status.dto';
 import { UpdateTreatmentDoctorDto } from './dto/update-treatment-doctor.dto';
@@ -20,7 +18,6 @@ export class TreatmentsService {
 
   constructor(
     private readonly repo: TreatmentRepository,
-    private readonly primService: PrimService,
     private readonly eventEmitter: EventEmitter2,
     private readonly tenantPrisma: TenantPrismaService,
     private readonly auditLog: AuditLogService,
@@ -406,22 +403,13 @@ export class TreatmentsService {
         );
       }
 
-      // ADR-003 Faz 4 (prim sistemi.md §9.1): primi zaten dağıtılmış (tamamlanmış +
-      // ödemesi yapılmış) bir kalem, `reallocate=true` olsa dahi silinemez; prim
-      // dağıtılmamış ama tamamlanmış bir kalem içinse yalnızca Süper Admin silebilir.
+      // Tamamlanmış bir tedavi kalemi yalnızca Süper Admin tarafından silinebilir
+      // (prim/komisyon sistemi kaldırıldı — bkz. scope-reduction kararı).
       const completedItemIds = items.filter(item => item.status === 'COMPLETED').map(item => item.id);
-      if (completedItemIds.length > 0) {
-        const primmedItem = await tx.primRecord.findFirst({ where: { treatmentItemId: { in: completedItemIds } } });
-        if (primmedItem) {
-          throw new BadRequestException(
-            'Ödemesi yapılmış ve primi dağıtılmış bir tedavi kalemi silinemez.',
-          );
-        }
-        if (userRole !== 'SUPERADMIN') {
-          throw new ForbiddenException(
-            'Tamamlanmış bir tedavi kalemini yalnızca Süper Admin silebilir.',
-          );
-        }
+      if (completedItemIds.length > 0 && userRole !== 'SUPERADMIN') {
+        throw new ForbiddenException(
+          'Tamamlanmış bir tedavi kalemini yalnızca Süper Admin silebilir.',
+        );
       }
 
       const patientId = items[0].plan.patientId;
@@ -520,9 +508,7 @@ export class TreatmentsService {
 
   /**
    * LLD 3.2: Tedavi Kalemi Durum Güncelleme
-   * COMPLETED durumuna geçince:
-   *   1. Protokol numarası üretilir (değişmez kural)
-   *   2. TreatmentCompletedEvent fırlatılır → PrimService dinler
+   * COMPLETED durumuna geçince TreatmentCompletedEvent fırlatılır.
    */
   async updateItemStatus(
     itemId: string,
@@ -546,26 +532,17 @@ export class TreatmentsService {
         throw new BadRequestException('Tamamlanmış bir tedavi kalemi tekrar tamamlanamaz.');
       }
 
-      // ADR-003 Faz 4 (prim sistemi.md §9.1): Tamamlanmış bir kalemin durumu
-      // (iptal dahil) değiştiriliyorsa yetki kontrolü uygulanır.
+      // Tamamlanmış bir kalemin durumu (iptal dahil) değiştiriliyorsa yalnızca
+      // Süper Admin yapabilir (prim/komisyon sistemi kaldırıldı — bkz. scope-reduction kararı).
       if (item.status === 'COMPLETED' && updateDto.status !== 'COMPLETED') {
-        const existingPrimRecord = await tx.primRecord.findFirst({ where: { treatmentItemId: itemId } });
-        if (existingPrimRecord) {
-          throw new BadRequestException(
-            'Ödemesi yapılmış ve primi dağıtılmış bir tedavi kaleminde değişiklik yapılamaz.',
-          );
-        }
         if (userRole !== 'SUPERADMIN') {
           throw new ForbiddenException(
             'Tamamlanmış bir tedavi kaleminin durumunu yalnızca Süper Admin değiştirebilir.',
           );
         }
 
-        // Tamamlandı → başka bir statüye geri alınıyorsa: daha önce üretilen protokol
-        // numarası geçersiz hale geldiği için iptal edilir (prim kaydı zaten yok).
-        await tx.protocol.deleteMany({ where: { treatmentItemId: itemId } });
         this.logger.log(
-          `Tedavi geri alındı: ${itemId} | COMPLETED → ${updateDto.status} | Protokol iptal edildi | Superadmin: ${userId}`,
+          `Tedavi geri alındı: ${itemId} | COMPLETED → ${updateDto.status} | Superadmin: ${userId}`,
         );
 
         await this.auditLog.log({
@@ -577,8 +554,7 @@ export class TreatmentsService {
           details: { from: 'COMPLETED', to: updateDto.status },
         });
       } else if (updateDto.status === 'CANCELLED') {
-        // Tamamlanmamış (Bekliyor/Devam Ediyor) bir kalemin standart kullanıcı
-        // tarafından iptali — prim sistemi.md §9.1'e göre kısıtlama gerektirmez.
+        // Tamamlanmamış (Bekliyor/Devam Ediyor) bir kalemin standart kullanıcı tarafından iptali.
         await this.auditLog.log({
           userId,
           clinicId,
@@ -595,26 +571,11 @@ export class TreatmentsService {
         data: { status: updateDto.status },
       });
 
-      // 3. COMPLETED → Protokol üret + Event fırlat
+      // 3. COMPLETED → Event fırlat
       if (updateDto.status === 'COMPLETED') {
-        // 3a. Protokol numarası üretimi (yıl + hasta prefix + UUID hash)
-        const year = new Date().getFullYear();
-        const uniqueId = crypto.randomBytes(3).toString('hex').toUpperCase();
-        const protocolNo = `${year}-${item.plan.patientId.substring(0, 4).toUpperCase()}-${uniqueId}`;
-
-        await tx.protocol.create({
-          data: {
-            treatmentItemId: itemId,
-            protocolNo,
-            ussStatus: 'PENDING', // BullMQ worker → Sağlık Bakanlığı entegrasyonu
-          },
-        });
-
-        // 3b. Domain Event → PrimService idempotency key ile hesaplar
         const idempotencyKey = `treatment_completed_${itemId}_${item.doctorId}`;
         const fee = Number(item.price);
 
-        // Event senkron fırlatılır; PrimService'in calculate() idempotent'tir
         this.eventEmitter.emit(
           EVENTS.TREATMENT_COMPLETED,
           new TreatmentCompletedEvent(
@@ -627,7 +588,7 @@ export class TreatmentsService {
         );
 
         this.logger.log(
-          `Tedavi tamamlandı: ${itemId} | Protokol: ${protocolNo} | Hekim: ${item.doctorId}`,
+          `Tedavi tamamlandı: ${itemId} | Hekim: ${item.doctorId}`,
         );
       }
 
@@ -637,8 +598,7 @@ export class TreatmentsService {
 
   /**
    * Tedavi kalemine atanan hekimi değiştirir.
-   * COMPLETED statüsündeki kalemlerde hekim değişikliğine izin verilmez,
-   * çünkü protokol numarası ve prim kaydı zaten ilk hekime göre üretilmiştir.
+   * COMPLETED statüsündeki kalemlerde hekim değişikliğine izin verilmez.
    */
   async updateItemDoctor(
     itemId: string,

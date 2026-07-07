@@ -83,7 +83,7 @@ export class EmailService {
     }
   }
 
-  // Personel/kullanıcı davet akışı (EmployeesService.invite, UsersService.create) tarafından paylaşılır.
+  // Kullanıcı davet akışı (UsersService.create) tarafından paylaşılır.
   async sendInviteEmail(to: string, firstName: string, inviteLink: string): Promise<boolean> {
     const html = `
       <!DOCTYPE html>

@@ -1,6 +1,6 @@
-import { IsEmail, IsOptional, IsString, IsBoolean } from 'class-validator';
+import { IsOptional, IsString, IsEmail, IsBoolean } from 'class-validator';
 
-export class UpdateEmployeeDto {
+export class UpdateDoctorDto {
   @IsOptional()
   @IsString()
   firstName?: string;
@@ -10,16 +10,8 @@ export class UpdateEmployeeDto {
   lastName?: string;
 
   @IsOptional()
-  @IsEmail()
+  @IsEmail({}, { message: 'Geçerli bir e-posta adresi giriniz' })
   email?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isDoctor?: boolean;
-
-  @IsOptional()
-  @IsString()
-  title?: string;
 
   @IsOptional()
   @IsString()
@@ -27,7 +19,11 @@ export class UpdateEmployeeDto {
 
   @IsOptional()
   @IsString()
-  nationalId?: string;
+  title?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isDoctor?: boolean;
 
   @IsOptional()
   @IsBoolean()

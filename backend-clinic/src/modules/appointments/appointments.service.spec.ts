@@ -7,7 +7,6 @@ import { AppointmentRepository } from './appointment.repository';
 describe('AppointmentsService — Klinik Sahipliği ve Çakışma Kontrolü', () => {
   let service: AppointmentsService;
   let mockRepo: any;
-  let workHourRow: any;
 
   const clinicA = 'clinic-a';
   const clinicB = 'clinic-b';
@@ -17,9 +16,6 @@ describe('AppointmentsService — Klinik Sahipliği ve Çakışma Kontrolü', ()
 
   function makeTxClient() {
     return {
-      employeeLeave: {
-        findFirst: jest.fn().mockResolvedValue(null),
-      },
       appointment: {
         findFirst: jest.fn(({ where }: any) => {
           const match = appointments.find((a) => {
@@ -68,17 +64,11 @@ describe('AppointmentsService — Klinik Sahipliği ve Çakışma Kontrolü', ()
       },
     ];
 
-    workHourRow = null;
-
     mockRepo = {
       findById: jest.fn((id: string) => Promise.resolve(appointments.find((a) => a.id === id) || null)),
       findByIdWithRelations: jest.fn((id: string) => Promise.resolve(appointments.find((a) => a.id === id) || null)),
       runInTransaction: jest.fn((fn: any) => fn(makeTxClient())),
-      getTenantDb: jest.fn(() =>
-        Promise.resolve({
-          employeeWorkHour: { findFirst: jest.fn(() => Promise.resolve(workHourRow)) },
-        }),
-      ),
+      getTenantDb: jest.fn(() => Promise.resolve({})),
       getDoctorName: jest.fn().mockResolvedValue('Dr. Test Hekim'),
     };
 
@@ -170,86 +160,18 @@ describe('AppointmentsService — Klinik Sahipliği ve Çakışma Kontrolü', ()
     });
   });
 
-  describe('Mesai saati kontrolü (yumuşak uyarı)', () => {
-    // NOT: Tüm zamanlar burada kasıtlı olarak açık 'Z' (UTC) offset'iyle veriliyor,
-    // yerel saat dilimine bağlı ('...T19:00:00' gibi Z'siz) string'ler kullanılmıyor.
-    // Sunucu (Docker imajı) UTC'de çalışır ama mesai saatleri klinik saat dilimini
-    // (Europe/Istanbul, UTC+3) ifade eder — bkz. appointments.service.ts
-    // getClinicDateParts(). Z'siz bir string test makinesinin yerel saatine göre
-    // yorumlanacağından, testin hangi makinede çalıştığına bağlı olarak hem hatalı
-    // kodu hem düzeltmeyi "yanlışlıkla" yeşil gösterebilirdi.
-
-    it('mesai tanımı yoksa tüm saatler açık kabul edilir, uyarı üretilmez', async () => {
-      workHourRow = null;
+  describe('Mesai saati kontrolü (kaldırıldı — İK modülü scope dışı)', () => {
+    // Personel mesai saati tanımları (EmployeeWorkHour) İK modülüyle birlikte
+    // kaldırıldı (bkz. scope-reduction kararı). checkWorkHours artık her zaman
+    // "mesai dışı değil" döner; imza geriye dönük uyumluluk için korunuyor.
+    it('her zaman outsideWorkHours=false döner', async () => {
       const result = await service.checkWorkHours(
         clinicA,
         'doctor-1',
-        new Date('2026-08-03T16:00:00Z'), // 19:00 İstanbul
+        new Date('2026-08-03T16:00:00Z'),
         new Date('2026-08-03T16:30:00Z'),
       );
       expect(result.outsideWorkHours).toBe(false);
-    });
-
-    it('tanımlı mesai saatleri dışındaki randevu için uyarı döner (bloke etmez)', async () => {
-      workHourRow = { isWorking: true, startTime: '09:00', endTime: '18:00' };
-      const result = await service.checkWorkHours(
-        clinicA,
-        'doctor-1',
-        new Date('2026-08-03T16:00:00Z'), // 19:00 İstanbul — 09:00-18:00 mesaisi dışında
-        new Date('2026-08-03T16:30:00Z'),
-      );
-      expect(result.outsideWorkHours).toBe(true);
-      expect(result.workStart).toBe('09:00');
-    });
-
-    it('mesai saati içindeki randevu için uyarı üretilmez', async () => {
-      workHourRow = { isWorking: true, startTime: '09:00', endTime: '18:00' };
-      const result = await service.checkWorkHours(
-        clinicA,
-        'doctor-1',
-        new Date('2026-08-03T07:00:00Z'), // 10:00 İstanbul
-        new Date('2026-08-03T07:30:00Z'),
-      );
-      expect(result.outsideWorkHours).toBe(false);
-    });
-
-    it('REGRESYON: mesaisi 09:00-22:00 olan hekime tam mesai başlangıcında verilen randevu mesai dışı sayılmamalı', async () => {
-      // Bkz. bug raporu: "Ahmet Derdiyok mesai saatleri 09:00-22:00 seçildiği halde
-      // bu saatler arasında randevu verildiğinde mesai saatleri dışında uyarısı
-      // veriyor" — kök neden, sunucunun (UTC) `Date.getHours()` ile saati okuyup
-      // klinik yerel saatiyle (Europe/Istanbul, UTC+3) doğrudan karşılaştırmasıydı;
-      // 09:00 İstanbul == 06:00 UTC, ki bu da "09:00" mesai başlangıcından önce
-      // görünüp yanlışlıkla mesai dışı işaretleniyordu.
-      workHourRow = { isWorking: true, startTime: '09:00', endTime: '22:00' };
-      const result = await service.checkWorkHours(
-        clinicA,
-        'doctor-1',
-        new Date('2026-08-03T06:00:00Z'), // 09:00 İstanbul — mesai başlangıcı, dahil
-        new Date('2026-08-03T06:30:00Z'), // 09:30 İstanbul
-      );
-      expect(result.outsideWorkHours).toBe(false);
-    });
-
-    it('REGRESYON: aynı hekime mesai bitişine yakın (21:30-22:00 İstanbul) verilen randevu da mesai dışı sayılmamalı', async () => {
-      workHourRow = { isWorking: true, startTime: '09:00', endTime: '22:00' };
-      const result = await service.checkWorkHours(
-        clinicA,
-        'doctor-1',
-        new Date('2026-08-03T18:30:00Z'), // 21:30 İstanbul
-        new Date('2026-08-03T19:00:00Z'), // 22:00 İstanbul — mesai bitişi
-      );
-      expect(result.outsideWorkHours).toBe(false);
-    });
-
-    it('hekimin o gün hiç çalışmadığı durumda uyarı döner', async () => {
-      workHourRow = { isWorking: false, startTime: null, endTime: null };
-      const result = await service.checkWorkHours(
-        clinicA,
-        'doctor-1',
-        new Date('2026-08-03T07:00:00Z'), // 10:00 İstanbul
-        new Date('2026-08-03T07:30:00Z'),
-      );
-      expect(result.outsideWorkHours).toBe(true);
     });
   });
 

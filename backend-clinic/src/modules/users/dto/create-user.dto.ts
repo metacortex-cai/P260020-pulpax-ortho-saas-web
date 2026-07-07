@@ -32,7 +32,8 @@ export class CreateUserDto {
   @IsString()
   title?: string;
 
-  // Var olan bir Personel (Employee) kaydına bu kullanıcı hesabını bağlamak için opsiyonel.
+  // Var olan bir hekim (tenant Doctor) kaydına bu kullanıcı hesabını bağlamak için
+  // opsiyonel. Alan adı geriye dönük uyumluluk için "employeeId" olarak kalıyor.
   @IsOptional()
   @IsString()
   employeeId?: string;
