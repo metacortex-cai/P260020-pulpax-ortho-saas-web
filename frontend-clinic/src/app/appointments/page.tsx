@@ -6,13 +6,12 @@ import CalendarHeader from '../../components/calendar/CalendarHeader';
 import CalendarGrid from '../../components/calendar/CalendarGrid';
 import AppointmentModal from '../../components/calendar/AppointmentModal';
 import AppointmentPopover from '../../components/calendar/AppointmentPopover';
-import LeaveModal from '../../components/calendar/LeaveModal';
 import PrintCalendarModal from '../../components/calendar/PrintCalendarModal';
 import MiniCalendar from '../../components/calendar/MiniCalendar';
 import { Check } from 'lucide-react';
 import { Appointment } from '../../components/calendar/AppointmentBlock';
 import { AppointmentService, AppointmentWithPatient, AppointmentConflictInfo } from '../../lib/services/appointment.service';
-import { EmployeeService, EmployeeLeave, WorkHourPayload } from '../../lib/services/employee.service';
+import { DoctorService } from '../../lib/services/doctor.service';
 import { PatientService } from '../../lib/services/patient.service';
 import { useToastStore } from '../../store/toastStore';
 import InfoTooltip from '../../components/ui/InfoTooltip';
@@ -39,10 +38,7 @@ export default function AppointmentsPage() {
   const [selectedDoctorIds, setSelectedDoctorIds] = useState<Set<string>>(new Set());
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [popoverAppointment, setPopoverAppointment] = useState<AppointmentWithPatient | null>(null);
-  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [leaves, setLeaves] = useState<EmployeeLeave[]>([]);
-  const [workHours, setWorkHours] = useState<Record<string, WorkHourPayload[]>>({});
   const [occupancy, setOccupancy] = useState<{ date: string; total: number; capacityMinutes: number }[]>([]);
   const addToast = useToastStore(state => state.addToast);
 
@@ -52,7 +48,7 @@ export default function AppointmentsPage() {
       
       // 1. Fetch Doctors & Chairs
       const [staff, chs] = await Promise.all([
-        EmployeeService.findAll(),
+        DoctorService.findAll(),
         AppointmentService.getChairs()
       ]);
 
@@ -61,8 +57,9 @@ export default function AppointmentsPage() {
         .map((s, idx) => ({
           id: s.id,
           name: `Dt. ${s.firstName} ${s.lastName}`,
-          // Spec §2.1: hekim rengi Personel modülünden okunur; tanımlı değilse yedek palet kullanılır
-          color: s.calendarColor || DOCTOR_COLORS[idx % DOCTOR_COLORS.length]
+          // Personel modülü (ve onunla birlikte hekim rengi ayarı) kaldırıldı;
+          // sabit paletten sırayla renk atanır.
+          color: DOCTOR_COLORS[idx % DOCTOR_COLORS.length]
         }));
       setDoctors(docs);
       setChairs(chs);
@@ -112,16 +109,10 @@ export default function AppointmentsPage() {
       const ptsRes = await PatientService.findAll({ limit: 200, sortBy: 'firstName', sortDir: 'asc' });
       setPatients(ptsRes.data);
 
-      // 4. Fetch leaves (görünür aralıkla kesişenler) + seçili hekimlerin mesai saatleri (spec §2.5/§6.4)
+      // 4. Mini takvim doluluk özeti (spec §8.3) — görünen ay için. Kapasite
+      // (mesai saati) tanımı İK modülüyle birlikte kaldırıldı; backend artık
+      // capacityMinutes=0 döner, yalnızca günlük randevu sayısı gösterilir.
       if (docs.length > 0) {
-        const [leavesRes, workHoursRes] = await Promise.all([
-          EmployeeService.findAllLeaves(start.toISOString(), end.toISOString()),
-          EmployeeService.getWorkHoursBulk(docs.map(d => d.id)),
-        ]);
-        setLeaves(leavesRes);
-        setWorkHours(workHoursRes);
-
-        // 5. Mini takvim doluluk özeti (spec §8.3) — görünen ay için
         const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
         AppointmentService.getOccupancy(monthKey, docs.map(d => d.id)).then(setOccupancy).catch(() => {});
       }
@@ -384,7 +375,6 @@ export default function AppointmentsPage() {
             view={view}
             onViewChange={setView}
             onAddAppointment={() => { setModalData(undefined); setIsModalOpen(true); }}
-            onAddLeave={() => setIsLeaveModalOpen(true)}
             onPrintCalendar={() => setIsPrintModalOpen(true)}
           />
 
@@ -394,8 +384,6 @@ export default function AppointmentsPage() {
             appointments={view === 'chair' ? appointments : appointments.filter(a => selectedDoctorIds.has(a.doctorId))}
             doctors={visibleDoctors}
             chairs={chairs}
-            leaves={leaves}
-            workHours={workHours}
             onSlotClick={handleSlotClick}
             onAppointmentClick={handleAppointmentClick}
             onAppointmentMove={handleAppointmentMove}
@@ -422,12 +410,6 @@ export default function AppointmentsPage() {
         onCancel={handleCancelAppointment}
         onPostpone={handlePostponeAppointment}
         onEdit={handleEditFromPopover}
-      />
-
-      <LeaveModal
-        isOpen={isLeaveModalOpen}
-        onClose={() => setIsLeaveModalOpen(false)}
-        onSaved={fetchData}
       />
 
       <PrintCalendarModal

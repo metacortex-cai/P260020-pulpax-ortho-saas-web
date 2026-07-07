@@ -7,7 +7,7 @@ import { Edit2, Save, X, Plus } from 'lucide-react';
 import Modal from '../../../../components/ui/Modal';
 import { generalPatientSchema, GeneralPatientFormData } from '../../../../lib/schemas/general-patient.schema';
 import { PatientService } from '../../../../lib/services/patient.service';
-import { EmployeeService, Employee } from '../../../../lib/services/employee.service';
+import { DoctorService, Doctor } from '../../../../lib/services/doctor.service';
 import { TreatmentService, Tariff } from '../../../../lib/services/treatment.service';
 import { useToastStore } from '../../../../store/toastStore';
 import { COUNTRY_CODES } from '../../../../lib/utils/countryCodes';
@@ -134,7 +134,7 @@ export default function GeneralTab({ patient, onUpdate }: Props) {
   const [editing, setEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const addToast = useToastStore(state => state.addToast);
-  const [doctors, setDoctors] = useState<Employee[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
   const [tariffGroups, setTariffGroups] = useState<any[]>([]);
   const [isLoadingMeta, setIsLoadingMeta] = useState(false);
@@ -162,10 +162,10 @@ export default function GeneralTab({ patient, onUpdate }: Props) {
   useEffect(() => {
     let mounted = true;
     setIsLoadingMeta(true);
-    Promise.all([EmployeeService.findAll(), TreatmentService.getTariffGroups()])
-      .then(([emps, groups]) => {
+    Promise.all([DoctorService.findAll(), TreatmentService.getTariffGroups()])
+      .then(([docs, groups]) => {
         if (!mounted) return;
-        setDoctors(emps.filter((e: Employee) => e.isDoctor && e.isActive));
+        setDoctors(docs.filter((d: Doctor) => d.isDoctor && d.isActive));
         setTariffGroups(groups || []);
       }).catch((err) => {
       console.error('Failed to load meta:', err);

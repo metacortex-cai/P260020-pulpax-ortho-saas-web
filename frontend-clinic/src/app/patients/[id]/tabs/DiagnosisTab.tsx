@@ -6,7 +6,7 @@ import DentalChart, { toothName } from '../../../../components/patients/DentalCh
 import Modal from '../../../../components/ui/Modal';
 import ConfirmModal from '../../../../components/ui/ConfirmModal';
 import { useToastStore } from '../../../../store/toastStore';
-import { Employee, EmployeeService } from '../../../../lib/services/employee.service';
+import { Doctor, DoctorService } from '../../../../lib/services/doctor.service';
 import api from '../../../../lib/api';
 
 // ── DrDentes'ten çekilen tam diyagnoz listesi ─────────────────────
@@ -149,7 +149,7 @@ interface DiagRecord {
 export default function DiagnosisTab({ patient }: { patient: any }) {
   const { addToast } = useToastStore();
 
-  const [doctors, setDoctors]               = useState<Employee[]>([]);
+  const [doctors, setDoctors]               = useState<Doctor[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState('');
   const [loading, setLoading]               = useState(true);
   const [dentitionMode, setDentitionMode]   = useState<'adult' | 'child'>('adult');
@@ -171,9 +171,9 @@ export default function DiagnosisTab({ patient }: { patient: any }) {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    EmployeeService.findAll()
-      .then(emps => {
-        const docs = emps.filter(e => e.isDoctor && e.isActive);
+    DoctorService.findAll()
+      .then(all => {
+        const docs = all.filter(d => d.isDoctor && d.isActive);
         setDoctors(docs);
         if (docs.length) setSelectedDoctor(docs[0].id);
       })

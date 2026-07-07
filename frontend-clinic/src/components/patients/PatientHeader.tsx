@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Hash, User2, FileText, PanelLeftClose, PanelLeftOpen, Camera, Loader2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { EmployeeService, Employee } from '../../lib/services/employee.service';
+import { DoctorService, Doctor } from '../../lib/services/doctor.service';
 import { TreatmentService } from '../../lib/services/treatment.service';
 import { PatientService, resolveDocumentUrl } from '../../lib/services/patient.service';
 import { useToastStore } from '../../store/toastStore';
@@ -62,16 +62,16 @@ export default function PatientHeader({
 }: PatientHeaderProps) {
   const router = useRouter();
   const addToast = useToastStore(state => state.addToast);
-  const [doctors, setDoctors] = useState<Employee[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [tariffGroups, setTariffGroups] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([EmployeeService.findAll(), TreatmentService.getTariffGroups()])
-      .then(([emps, groups]) => {
+    Promise.all([DoctorService.findAll(), TreatmentService.getTariffGroups()])
+      .then(([docs, groups]) => {
         if (!mounted) return;
-        setDoctors(emps.filter((e: Employee) => e.isDoctor && e.isActive));
+        setDoctors(docs.filter((d: Doctor) => d.isDoctor && d.isActive));
         setTariffGroups(groups || []);
       })
       .catch(() => {});

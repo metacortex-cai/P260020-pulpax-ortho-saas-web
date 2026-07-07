@@ -18,7 +18,7 @@ import AppointmentModal from '../calendar/AppointmentModal';
 import CommandPalette from './CommandPalette';
 import Modal from '../ui/Modal';
 import { PatientService } from '../../lib/services/patient.service';
-import { EmployeeService, Employee } from '../../lib/services/employee.service';
+import { DoctorService, Doctor } from '../../lib/services/doctor.service';
 import { Patient } from '../../lib/types';
 import { useToastStore } from '../../store/toastStore';
 import { 
@@ -45,11 +45,7 @@ import {
   Stethoscope,
   TrendingUp,
   BarChart3,
-  Package,
-  Book,
   Tags,
-  FlaskConical,
-  UserCircle,
   X,
   UserPlus,
   LogOut,
@@ -93,7 +89,7 @@ export default function MetronicLayout({ children, title = '', breadcrumbs = [],
   
   // Real Data for Modals
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [doctors, setDoctors] = useState<Employee[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
 
   // Pager System State
   const [isPagerSenderOpen, setIsPagerSenderOpen] = useState(false);
@@ -198,13 +194,13 @@ export default function MetronicLayout({ children, title = '', breadcrumbs = [],
     
     const loadModalData = async () => {
       try {
-        const [ptsRes, emps] = await Promise.all([
+        const [ptsRes, docs] = await Promise.all([
           PatientService.findAll({ limit: 200, sortBy: 'firstName', sortDir: 'asc' }),
-          EmployeeService.findAll()
+          DoctorService.findAll()
         ]);
         setPatients(ptsRes.data);
         // Sadece Doktor rolündekileri filtrele
-        setDoctors(emps.filter(e => e.isDoctor && e.isActive));
+        setDoctors(docs.filter(d => d.isDoctor && d.isActive));
       } catch (err) {
         console.error('Failed to load modal data:', err);
       }
@@ -329,16 +325,12 @@ export default function MetronicLayout({ children, title = '', breadcrumbs = [],
 
   const navItems = [
     { name: t('home'), path: '/dashboard', icon: LayoutDashboard },
-    { name: t('protocolBook'), path: '/protocol', icon: Book },
     { name: t('patientOperations'), icon: Users, subItems: [ { name: t('patients'), path: '/patients' } ]},
     { name: t('appointment'), icon: Calendar, subItems: [ { name: t('appointmentCalendar'), path: '/appointments' }, { name: t('appointmentRequests'), path: '/appointments/requests' } ]},
     { name: t('finance'), icon: CreditCard, subItems: [ { name: t('patientCurrent'), path: '/finance/patient-current' }, { name: t('vaultsAndBanks'), path: '/finance/vaults-banks' } ]},
     { name: t('tariffOperations'), icon: Tags, subItems: [ { name: t('tariffs'), path: '/tariffs' }, { name: t('treatments'), path: '/treatments' } ]},
-    { name: t('stockWarehouse'), icon: Package, subItems: [ { name: t('inventories'), path: '/inventory/status' }, { name: t('fixtures'), path: '/inventory/fixtures' }, { name: t('stockMovements'), path: '/inventory/movements' }, { name: t('materials'), path: '/inventory/materials' } ]},
-    { name: t('laboratory'), icon: FlaskConical, subItems: [ { name: t('labMovements'), path: '/lab/movements' }, { name: t('laboratories'), path: '/lab/labs' }, { name: t('procedures'), path: '/lab/procedures' }, { name: t('priceTariffs'), path: '/lab/tariffs' } ]},
-    { name: t('humanResources'), icon: UserCircle, subItems: [ { name: t('staff'), path: '/hr/staff' }, { name: t('leaves'), path: '/hr/leaves' } ]},
     { name: t('supportCenter'), icon: LifeBuoy, subItems: [ { name: t('supportTickets'), path: '/support/tickets' }, { name: t('helpCenter'), path: '/support/faq' } ]},
-    { name: t('reports'), icon: BarChart3, subItems: [ { name: t('appointmentCalendar'), path: '/reports/appointments' }, { name: t('physicianEarningsReport'), path: '/reports/commissions' }, { name: t('collectionsAndPaymentsReport'), path: '/reports/collections' }, { name: t('laboratoryReport'), path: '/reports/labs' }, { name: t('patientAcquisitionReport'), path: '/reports/acquisition' }, { name: t('stockInventoryReport'), path: '/reports/inventory' }, { name: t('treatmentStatisticsReport'), path: '/reports/treatments' }, { name: t('debtorListReport'), path: '/reports/debtors' }, { name: t('cancelledAppointmentAnalysis'), path: '/reports/cancellations' }, { name: t('physicianPerformanceReport'), path: '/reports/doctor-performance' } ]},
+    { name: t('reports'), icon: BarChart3, subItems: [ { name: t('appointmentCalendar'), path: '/reports/appointments' }, { name: t('collectionsAndPaymentsReport'), path: '/reports/collections' }, { name: t('patientAcquisitionReport'), path: '/reports/acquisition' }, { name: t('treatmentStatisticsReport'), path: '/reports/treatments' }, { name: t('debtorListReport'), path: '/reports/debtors' }, { name: t('cancelledAppointmentAnalysis'), path: '/reports/cancellations' } ]},
     { name: t('settings'), icon: Settings, subItems: [ { name: t('users'), path: '/settings/users' }, { name: t('roles'), path: '/settings/roles' }, { name: t('clinicInfo'), path: '/settings/clinic' }, { name: t('smsTemplates'), path: '/settings/sms' }, { name: t('documentTemplates'), path: '/settings/templates' }, { name: t('notificationSettings'), path: '/settings/notifications' }, { name: t('financeSettings'), path: '/settings/finance' }, { name: t('auditLogs'), path: '/settings/audit-logs' }, { name: t('dataEntry'), path: '/settings/data-entry' }, { name: t('integrations'), path: '/settings/integrations' }, { name: t('patientCategories'), path: '/settings/patient-categories' } ]}
   ];
 

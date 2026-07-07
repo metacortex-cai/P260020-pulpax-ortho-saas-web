@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import Dropdown from '../../../../components/ui/Dropdown';
 import { TreatmentService } from '../../../../lib/services/treatment.service';
-import { EmployeeService, Employee } from '../../../../lib/services/employee.service';
+import { DoctorService, Doctor } from '../../../../lib/services/doctor.service';
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   WAITING:     { label: 'Bekliyor',     cls: 'bg-slate-100 text-slate-500' },
@@ -47,7 +47,7 @@ const PAGE_LIMIT_OPTIONS = [10, 25, 50, 100];
 
 export default function TreatmentsTab({ patient }: { patient: any }) {
   const [treatments, setTreatments] = useState<any[]>([]);
-  const [doctors, setDoctors] = useState<Employee[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkEditing, setIsBulkEditing] = useState(false);
@@ -66,11 +66,11 @@ export default function TreatmentsTab({ patient }: { patient: any }) {
   const fetchTreatments = async () => {
     try {
       setLoading(true);
-      const [plans, fetchedEmployees] = await Promise.all([
+      const [plans, fetchedDoctors] = await Promise.all([
         TreatmentService.findPlansByPatient(patient.id),
-        EmployeeService.findAll(),
+        DoctorService.findAll(),
       ]);
-      setDoctors(fetchedEmployees.filter((e: Employee) => e.isDoctor));
+      setDoctors(fetchedDoctors.filter((d: Doctor) => d.isDoctor));
       const items = plans
         .filter((plan: any) => plan.status === 'ACTIVE')
         .flatMap((plan: any) =>

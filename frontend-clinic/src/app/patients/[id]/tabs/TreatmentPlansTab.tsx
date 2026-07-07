@@ -8,7 +8,7 @@ import Dropdown from '../../../../components/ui/Dropdown';
 import DentalChart, { AREA_CODES, toothName } from '../../../../components/patients/DentalChart';
 import { useToastStore } from '../../../../store/toastStore';
 import { TreatmentService, Tariff } from '../../../../lib/services/treatment.service';
-import { Employee, EmployeeService } from '../../../../lib/services/employee.service';
+import { Doctor, DoctorService } from '../../../../lib/services/doctor.service';
 import { exportTreatmentPlanPDF, exportTreatmentPlanXLS } from '../../../../lib/utils/exportTreatmentPlan';
 import { formatCurrency } from '../../../../lib/utils/formatCurrency';
 
@@ -116,19 +116,19 @@ export default function TreatmentPlansTab({ patient }: { patient: any }) {
   const [globalDiscountTotal, setGlobalDiscountTotal] = useState<number | ''>('');
 
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
-  const [doctors, setDoctors] = useState<Employee[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = async (keepActivePlanId?: string) => {
     try {
       setLoading(true);
-      const [fetchedPlans, fetchedTariffs, fetchedEmployees] = await Promise.all([
+      const [fetchedPlans, fetchedTariffs, fetchedDoctors] = await Promise.all([
         TreatmentService.findPlansByPatient(patient.id),
         TreatmentService.getTariffs(),
-        EmployeeService.findAll(),
+        DoctorService.findAll(),
       ]);
       setTariffs(fetchedTariffs);
-      const activeDocs = fetchedEmployees.filter(e => e.isDoctor && e.isActive);
+      const activeDocs = fetchedDoctors.filter(d => d.isDoctor && d.isActive);
       setDoctors(activeDocs);
       const assignedDoc = activeDocs.find(d => d.id === patient.assignedDoctor);
       if (assignedDoc) setSelectedDoctor(assignedDoc.id);

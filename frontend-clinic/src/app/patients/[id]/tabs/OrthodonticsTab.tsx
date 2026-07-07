@@ -18,7 +18,7 @@ import {
   OrthoRetentionPlan,
 } from '../../../../lib/services/orthodontics.service';
 import { TreatmentService, Tariff } from '../../../../lib/services/treatment.service';
-import { Employee, EmployeeService } from '../../../../lib/services/employee.service';
+import { Doctor, DoctorService } from '../../../../lib/services/doctor.service';
 import { formatCurrency } from '../../../../lib/utils/formatCurrency';
 import { resolveDocumentUrl } from '../../../../lib/services/patient.service';
 
@@ -279,7 +279,7 @@ export default function OrthodonticsTab({ patient }: { patient: any }) {
   const [cases, setCases] = useState<OrthoCase[]>([]);
   const [activeCaseId, setActiveCaseId] = useState<string>('');
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
-  const [doctors, setDoctors] = useState<Employee[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [creatingCase, setCreatingCase] = useState(false);
 
   const activeCase = cases.find(c => c.id === activeCaseId) ?? cases[0] ?? null;
@@ -305,14 +305,14 @@ export default function OrthodonticsTab({ patient }: { patient: any }) {
     if (!patient?.id) return;
     try {
       setLoading(true);
-      const [fetchedCases, fetchedTariffs, fetchedEmployees] = await Promise.all([
+      const [fetchedCases, fetchedTariffs, fetchedDoctors] = await Promise.all([
         OrthodonticsService.findCasesByPatient(patient.id),
         TreatmentService.getTariffs(),
-        EmployeeService.findAll(),
+        DoctorService.findAll(),
       ]);
       setCases(fetchedCases);
       setTariffs(fetchedTariffs);
-      setDoctors(fetchedEmployees.filter(e => e.isDoctor && e.isActive));
+      setDoctors(fetchedDoctors.filter(d => d.isDoctor && d.isActive));
       if (keepCaseId && fetchedCases.some(c => c.id === keepCaseId)) {
         setActiveCaseId(keepCaseId);
       } else if (fetchedCases.length > 0) {
@@ -510,7 +510,7 @@ function DiagnosisSection({
   onChanged,
 }: {
   orthoCase: OrthoCase;
-  doctors: Employee[];
+  doctors: Doctor[];
   onChanged: () => Promise<void> | void;
 }) {
   const { addToast } = useToastStore();
@@ -867,7 +867,7 @@ function TreatmentPlanSection({
 }: {
   orthoCase: OrthoCase;
   orthoTariffs: Tariff[];
-  doctors: Employee[];
+  doctors: Doctor[];
   patient: any;
   onChanged: () => Promise<void> | void;
 }) {
@@ -1741,7 +1741,7 @@ function MiniScrewSection({
 }: {
   orthoCase: OrthoCase;
   orthoTariffs: Tariff[];
-  doctors: Employee[];
+  doctors: Doctor[];
   onChanged: () => Promise<void> | void;
 }) {
   const { addToast } = useToastStore();

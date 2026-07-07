@@ -38,26 +38,6 @@ export interface AcquisitionReportItem {
   revenue: number;
 }
 
-export interface LabReportItem {
-  id: string;
-  name: string;
-  totalWorks: number;
-  completed: number;
-  pending: number;
-  revisionRate: number;
-  totalCost: number;
-}
-
-export interface InventoryReportItem {
-  id: string;
-  name: string;
-  category: string;
-  stock: number;
-  unit: string;
-  value: number;
-  status: string;
-}
-
 export interface CancellationReportItem {
   id: string;
   reason: string;
@@ -65,17 +45,6 @@ export interface CancellationReportItem {
   percentage: number;
   trend: string;
   impact: number;
-}
-
-export interface CommissionReportItem {
-  id: string;
-  doctor: string;
-  branch: string;
-  totalTurnover: number;
-  labCosts: number;
-  netTurnover: number;
-  commissionRate: number;
-  commissionAmount: number;
 }
 
 export interface CollectionReportItem {
@@ -126,14 +95,6 @@ export const ReportsService = {
     return response.data;
   },
 
-  async getDoctorPerformance(startDate?: string, endDate?: string): Promise<any[]> {
-    const params = new URLSearchParams();
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    const response = await api.get<any[]>(`/reports/doctors/performance?${params.toString()}`);
-    return response.data;
-  },
-
   async getAcquisitionReport(startDate?: string, endDate?: string): Promise<AcquisitionReportItem[]> {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
@@ -142,32 +103,11 @@ export const ReportsService = {
     return response.data;
   },
 
-  async getLabReport(startDate?: string, endDate?: string): Promise<LabReportItem[]> {
-    const params = new URLSearchParams();
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    const response = await api.get<LabReportItem[]>(`/reports/labs?${params.toString()}`);
-    return response.data;
-  },
-
-  async getInventoryReport(): Promise<InventoryReportItem[]> {
-    const response = await api.get<InventoryReportItem[]>('/reports/inventory');
-    return response.data;
-  },
-
   async getCancellationsReport(startDate?: string, endDate?: string): Promise<CancellationReportItem[]> {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
     const response = await api.get<CancellationReportItem[]>(`/reports/cancellations?${params.toString()}`);
-    return response.data;
-  },
-
-  async getCommissionsReport(startDate?: string, endDate?: string): Promise<CommissionReportItem[]> {
-    const params = new URLSearchParams();
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    const response = await api.get<CommissionReportItem[]>(`/reports/commissions?${params.toString()}`);
     return response.data;
   },
 

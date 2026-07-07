@@ -25,6 +25,15 @@ export interface CreateUserPayload {
   employeeId?: string;
 }
 
+export interface Session {
+  id: string;
+  device: string;
+  ip: string;
+  location: string;
+  current: boolean;
+  date: string;
+}
+
 export const UserService = {
   async findAll(includePassive = false): Promise<User[]> {
     const response = await api.get<User[]>(`/users?includePassive=${includePassive}`);
@@ -57,5 +66,28 @@ export const UserService = {
   async transferSystemAdmin(toUserId: string): Promise<{ systemAdminUserId: string }> {
     const response = await api.post<{ systemAdminUserId: string }>('/users/transfer-system-admin', { toUserId });
     return response.data;
+  },
+
+  // --- Hesap / oturum yönetimi ("Ayarlar > Profil" sayfası) ---
+  // NOT: bu üç oturum metodu daha önce employee.service.ts içinde yaşıyordu
+  // (Employee/HR ile ilgisi yoktu, sadece o dosyaya konmuştu). Employee
+  // kaldırıldığı için buraya taşındı; /auth/sessions* ve /auth/change-password
+  // backend'de henüz karşılığı olmayan uçlar (bu taşımadan önce de öyleydi).
+
+  async getSessions(): Promise<Session[]> {
+    const response = await api.get<Session[]>('/auth/sessions');
+    return response.data;
+  },
+
+  async revokeSession(sessionId: string): Promise<void> {
+    await api.delete(`/auth/sessions/${sessionId}`);
+  },
+
+  async revokeAllOtherSessions(): Promise<void> {
+    await api.delete('/auth/sessions/others');
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await api.patch('/auth/change-password', { currentPassword, newPassword });
   },
 };

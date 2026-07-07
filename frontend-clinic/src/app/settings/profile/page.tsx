@@ -6,11 +6,11 @@ import { useAuthStore } from '../../../store/authStore';
 import { useToastStore } from '../../../store/toastStore';
 import MetronicLayout from '../../../components/layout/MetronicLayout';
 import InfoTooltip from '../../../components/ui/InfoTooltip';
-import { EmployeeService, Commission, Session } from '../../../lib/services/employee.service';
+import { DoctorService } from '../../../lib/services/doctor.service';
+import { UserService, Session } from '../../../lib/services/user.service';
 import {
   User, Shield, Save, CheckCircle2, Lock, Monitor, Mail, Phone,
-  Clock, Eye, EyeOff, Smartphone, DollarSign, Wallet, Percent,
-  TrendingUp, Search, Calendar
+  Clock, Eye, EyeOff, Smartphone
 } from 'lucide-react';
 
 const AVATAR_COLORS = [
@@ -28,7 +28,7 @@ export default function ProfilePage() {
   const router = useRouter();
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'personal' | 'security' | 'commissions'>('personal');
+  const [activeTab, setActiveTab] = useState<'personal' | 'security'>('personal');
 
   // Feedback States
   const [savedPersonal, setSavedPersonal] = useState(false);
@@ -39,36 +39,9 @@ export default function ProfilePage() {
   // Avatar State
   const [selectedColor, setSelectedColor] = useState(AVATAR_COLORS[0]);
 
-  // Sessions & Commissions from API
+  // Sessions from API
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [commissions, setCommissions] = useState<Commission[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
-  const [loadingCommissions, setLoadingCommissions] = useState(false);
-
-  // Hekim / Doktor rol kontrolü
-  const isDoctor = user ? (
-    user.role === 'DOCTOR' ||
-    user.role === 'SUPERADMIN' ||
-    user.role === 'ADMIN'
-  ) : false;
-
-  // Commission filter
-  const [commissionSearch, setCommissionSearch] = useState('');
-  const [commissionStatus, setCommissionStatus] = useState<'all' | 'Ödendi' | 'Ödenecek'>('all');
-
-  const filteredCommissions = commissions.filter(item => {
-    const matchesSearch = item.patientName.toLowerCase().includes(commissionSearch.toLowerCase()) ||
-                          item.treatmentName.toLowerCase().includes(commissionSearch.toLowerCase());
-    const matchesStatus = commissionStatus === 'all' || item.status === commissionStatus;
-    return matchesSearch && matchesStatus;
-  });
-
-  const totalGross = filteredCommissions.reduce((sum, item) => sum + item.grossAmount, 0);
-  const totalLab = filteredCommissions.reduce((sum, item) => sum + item.labCost, 0);
-  const totalNet = filteredCommissions.reduce((sum, item) => sum + item.netAmount, 0);
-  const totalCommission = filteredCommissions.reduce((sum, item) => sum + item.commission, 0);
-
-  const formatCurrency = (val: number) => val.toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + ' ₺';
 
   // Form State - Personal Info
   const [personalForm, setPersonalForm] = useState({
@@ -78,7 +51,6 @@ export default function ProfilePage() {
     phone: '',
     title: '',
     role: '',
-    tcNo: '',
     address: '',
     workHours: '',
     bio: '',
@@ -120,13 +92,12 @@ export default function ProfilePage() {
     const charCodeSum = (user.firstName || 'D').charCodeAt(0) + (user.lastName || 'K').charCodeAt(0);
     setSelectedColor(AVATAR_COLORS[charCodeSum % AVATAR_COLORS.length]);
 
-    // Fetch extended employee profile (phone, nationalId, etc.)
-    EmployeeService.findOne(user.id)
-      .then(emp => {
+    // Fetch extended doctor profile (phone, vb.) — hesap bir hekime bağlı değilse (örn. saf Admin/Resepsiyon) sessizce atlanır.
+    DoctorService.findOne(user.id)
+      .then(doc => {
         setPersonalForm(prev => ({
           ...prev,
-          phone: emp.phone || '',
-          tcNo: emp.nationalId || '',
+          phone: doc.phone || '',
         }));
       })
       .catch(() => {
@@ -135,20 +106,11 @@ export default function ProfilePage() {
 
     // Fetch active sessions
     setLoadingSessions(true);
-    EmployeeService.getSessions()
+    UserService.getSessions()
       .then(setSessions)
       .catch(() => addToast({ type: 'warning', title: 'Uyarı', message: 'Aktif oturumlar yüklenemedi.' }))
       .finally(() => setLoadingSessions(false));
-
-    // Fetch commissions if doctor
-    if (isDoctor) {
-      setLoadingCommissions(true);
-      EmployeeService.getCommissions(user.id)
-        .then(setCommissions)
-        .catch(() => addToast({ type: 'warning', title: 'Uyarı', message: 'Prim bilgileri yüklenemedi.' }))
-        .finally(() => setLoadingCommissions(false));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally scoped to user?.id only: re-running on every `user` object change (e.g. right after handleSavePersonal calls updateUser) would clobber in-progress form edits with stale server data; addToast/router are stable references from their hooks/stores and isDoctor is derived purely from user, so all four are safe to omit here
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally scoped to user?.id only: re-running on every `user` object change (e.g. right after handleSavePersonal calls updateUser) would clobber in-progress form edits with stale server data; addToast/router are stable references from their hooks/stores
   }, [user?.id]);
 
   const calculatePasswordStrength = (pass: string) => {
@@ -172,12 +134,11 @@ export default function ProfilePage() {
     if (!user) return;
     setSavingPersonal(true);
     try {
-      await EmployeeService.update(user.id, {
+      await DoctorService.update(user.id, {
         firstName: personalForm.firstName,
         lastName: personalForm.lastName,
         email: personalForm.email,
         phone: personalForm.phone,
-        nationalId: personalForm.tcNo,
       });
       updateUser({
         firstName: personalForm.firstName,
@@ -202,7 +163,7 @@ export default function ProfilePage() {
     }
     setSavingPassword(true);
     try {
-      await EmployeeService.changePassword(securityForm.currentPassword, securityForm.newPassword);
+      await UserService.changePassword(securityForm.currentPassword, securityForm.newPassword);
       setSavedSecurity(true);
       setSecurityForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setTimeout(() => setSavedSecurity(false), 3000);
@@ -216,7 +177,7 @@ export default function ProfilePage() {
 
   const handleRevokeSession = async (sessionId: string) => {
     try {
-      await EmployeeService.revokeSession(sessionId);
+      await UserService.revokeSession(sessionId);
       setSessions(prev => prev.filter(s => s.id !== sessionId));
       addToast({ type: 'success', title: 'Oturum Sonlandırıldı', message: 'Cihaz güvenli bir şekilde çıkış yaptı.' });
     } catch {
@@ -226,7 +187,7 @@ export default function ProfilePage() {
 
   const handleRevokeAllSessions = async () => {
     try {
-      await EmployeeService.revokeAllOtherSessions();
+      await UserService.revokeAllOtherSessions();
       setSessions(prev => prev.filter(s => s.current));
       addToast({ type: 'success', title: 'Oturumlar Kapatıldı', message: 'Şu an kullandığınız oturum hariç tüm oturumlar sonlandırıldı.' });
     } catch {
@@ -303,7 +264,6 @@ export default function ProfilePage() {
             {[
               { id: 'personal', label: 'Kişisel Bilgiler', icon: User },
               { id: 'security', label: 'Güvenlik & Şifre', icon: Lock },
-              ...(isDoctor ? [{ id: 'commissions', label: 'Primlerim', icon: DollarSign }] : []),
             ].map(tab => {
               const TabIcon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -387,22 +347,13 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Unvan / Görev</label>
                     <input
                       type="text"
                       value={personalForm.title}
                       onChange={e => setPersonalForm({ ...personalForm, title: e.target.value })}
-                      className="m-input"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">T.C. Kimlik No</label>
-                    <input
-                      type="text"
-                      value={personalForm.tcNo}
-                      onChange={e => setPersonalForm({ ...personalForm, tcNo: e.target.value })}
                       className="m-input"
                     />
                   </div>
@@ -690,155 +641,6 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* 3. PRİMLERİM SEKME */}
-            {activeTab === 'commissions' && isDoctor && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/5">
-                  <div>
-                    <h4 className="text-base font-bold text-slate-800 dark:text-white">Prim & Hakedişlerim</h4>
-                    <p className="text-[12px] text-slate-400 mt-0.5">Hasta ve tedavi bazlı prim kazançlarınızı detaylı olarak inceleyin.</p>
-                  </div>
-                </div>
-
-                {loadingCommissions ? (
-                  <div className="py-12 text-center text-slate-400 flex items-center justify-center gap-2">
-                    <span className="w-5 h-5 border-2 border-metronic-primary border-t-transparent rounded-full animate-spin" />
-                    Prim bilgileri yükleniyor...
-                  </div>
-                ) : commissions.length === 0 ? (
-                  <div className="py-12 text-center text-slate-400 text-sm">Henüz prim kaydı bulunmamaktadır.</div>
-                ) : (
-                  <>
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {[
-                        { label: 'Brüt Ciro', value: formatCurrency(totalGross), icon: <DollarSign size={18} />, color: 'text-metronic-primary', bg: 'bg-metronic-primary-light dark:bg-metronic-primary/10' },
-                        { label: 'Lab Maliyeti (-)', value: formatCurrency(totalLab), icon: <Wallet size={18} />, color: 'text-metronic-danger', bg: 'bg-red-50 dark:bg-red-500/10' },
-                        { label: 'Net Ciro', value: formatCurrency(totalNet), icon: <TrendingUp size={18} />, color: 'text-slate-700 dark:text-slate-200', bg: 'bg-slate-50 dark:bg-white/5' },
-                        { label: 'Net Primim', value: formatCurrency(totalCommission), icon: <Percent size={18} />, color: 'text-metronic-success', bg: 'bg-metronic-success-light dark:bg-metronic-success/10' },
-                      ].map((stat, i) => (
-                        <div key={i} className="bg-slate-50/50 dark:bg-white/[0.01] rounded-xl border border-slate-200/60 dark:border-white/5 p-4 flex flex-col justify-between">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{stat.label}</span>
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${stat.bg} ${stat.color}`}>
-                              {stat.icon}
-                            </div>
-                          </div>
-                          <h4 className="text-base font-black text-slate-800 dark:text-white mt-1 leading-none">{stat.value}</h4>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Filters */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-                      <div className="relative flex-1 max-w-md">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-                        <input
-                          type="text"
-                          placeholder="Hasta adı veya tedavi ara..."
-                          value={commissionSearch}
-                          onChange={(e) => setCommissionSearch(e.target.value)}
-                          className="m-input pl-9 pr-4 py-2 text-xs"
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {[
-                          { id: 'all', label: 'Tümü' },
-                          { id: 'Ödendi', label: 'Ödendi' },
-                          { id: 'Ödenecek', label: 'Ödenecek' },
-                        ].map(btn => (
-                          <button
-                            key={btn.id}
-                            type="button"
-                            onClick={() => setCommissionStatus(btn.id as any)}
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
-                              commissionStatus === btn.id
-                                ? 'bg-slate-800 dark:bg-white text-white dark:text-slate-900 shadow-sm'
-                                : 'bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'
-                            }`}
-                          >
-                            {btn.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Details Table */}
-                    <div className="overflow-x-auto border border-slate-200/60 dark:border-white/5 rounded-xl">
-                      <table className="w-full text-left border-collapse min-w-[700px]">
-                        <thead>
-                          <tr className="bg-slate-50/50 dark:bg-white/[0.02] text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200/60 dark:border-white/5">
-                            <th className="px-4 py-3">Hasta Bilgisi</th>
-                            <th className="px-4 py-3">Tarih</th>
-                            <th className="px-4 py-3">Tedavi Adı</th>
-                            <th className="px-4 py-3 text-right">Brüt Tutar</th>
-                            <th className="px-4 py-3 text-right">Lab Maliyeti</th>
-                            <th className="px-4 py-3 text-right">Net Tutar</th>
-                            <th className="px-4 py-3 text-center">Prim %</th>
-                            <th className="px-4 py-3 text-right">Prim Tutarı</th>
-                            <th className="px-4 py-3 text-center">Durum</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-[12px] font-medium text-slate-700 dark:text-slate-300">
-                          {filteredCommissions.length > 0 ? (
-                            filteredCommissions.map((item) => (
-                              <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors">
-                                <td className="px-4 py-3">
-                                  <span className="font-bold text-slate-800 dark:text-white block">{item.patientName}</span>
-                                  <span className="text-[10px] text-slate-400 block mt-0.5">{item.id}</span>
-                                </td>
-                                <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
-                                  <span className="flex items-center gap-1.5">
-                                    <Calendar size={13} className="text-slate-400" />
-                                    {item.date}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
-                                  {item.treatmentName}
-                                </td>
-                                <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-400">
-                                  {formatCurrency(item.grossAmount)}
-                                </td>
-                                <td className="px-4 py-3 text-right text-metronic-danger">
-                                  {item.labCost > 0 ? `-${formatCurrency(item.labCost)}` : '0,00 ₺'}
-                                </td>
-                                <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-200 font-semibold">
-                                  {formatCurrency(item.netAmount)}
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 rounded-md text-[10px] font-black">
-                                    %{item.rate}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-right text-metronic-success font-black">
-                                  {formatCurrency(item.commission)}
-                                </td>
-                                <td className="px-4 py-3 text-center whitespace-nowrap">
-                                  <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full ${
-                                    item.status === 'Ödendi'
-                                      ? 'bg-metronic-success-light text-metronic-success dark:bg-metronic-success/10'
-                                      : 'bg-amber-50 text-amber-600 dark:bg-amber-500/10'
-                                  }`}>
-                                    {item.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={9} className="py-8 text-center text-slate-400 text-xs">
-                                Eşleşen kayıt bulunamadı.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
 
           </div>
         </div>

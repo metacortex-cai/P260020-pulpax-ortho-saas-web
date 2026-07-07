@@ -16,7 +16,6 @@ export const useDashboardStore = create<DashboardState>()(
         'appointments',
         'recent_cash',
         'treatment_perf',
-        'critical_stock',
         'quick_actions'
       ],
       

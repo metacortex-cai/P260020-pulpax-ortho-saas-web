@@ -1,7 +1,7 @@
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, ChevronDown, CalendarPlus, UserX, Printer } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, ChevronDown, CalendarPlus, Printer } from 'lucide-react';
 import { useRef, useState, useEffect } from 'react';
 
-function CreateDropdown({ onAddAppointment, onAddLeave }: { onAddAppointment: () => void; onAddLeave: () => void }) {
+function CreateDropdown({ onAddAppointment }: { onAddAppointment: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -24,12 +24,6 @@ function CreateDropdown({ onAddAppointment, onAddLeave }: { onAddAppointment: ()
           >
             <CalendarPlus size={15} className="text-metronic-primary" /> Randevu Ekle
           </button>
-          <button
-            onClick={() => { setOpen(false); onAddLeave(); }}
-            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-left"
-          >
-            <UserX size={15} className="text-amber-500" /> İzin Ekle
-          </button>
         </div>
       )}
     </div>
@@ -43,11 +37,10 @@ interface CalendarHeaderProps {
   view: 'week' | 'day' | 'doctor' | 'chair';
   onViewChange: (view: 'week' | 'day' | 'doctor' | 'chair') => void;
   onAddAppointment: () => void;
-  onAddLeave: () => void;
   onPrintCalendar: () => void;
 }
 
-export default function CalendarHeader({ currentDate, onNavigate, onDateSelect, view, onViewChange, onAddAppointment, onAddLeave, onPrintCalendar }: CalendarHeaderProps) {
+export default function CalendarHeader({ currentDate, onNavigate, onDateSelect, view, onViewChange, onAddAppointment, onPrintCalendar }: CalendarHeaderProps) {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const monthYear = currentDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
 
@@ -117,8 +110,8 @@ export default function CalendarHeader({ currentDate, onNavigate, onDateSelect, 
           <Printer size={16} /> Yazdır
         </button>
 
-        {/* + Oluştur Dropdown (Randevu Ekle / İzin Ekle) */}
-        <CreateDropdown onAddAppointment={onAddAppointment} onAddLeave={onAddLeave} />
+        {/* + Oluştur Dropdown (Randevu Ekle) */}
+        <CreateDropdown onAddAppointment={onAddAppointment} />
       </div>
     </div>
   );

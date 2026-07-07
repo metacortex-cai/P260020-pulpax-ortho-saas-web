@@ -6,14 +6,13 @@ import Link from 'next/link';
 import { useAuthStore } from '../../store/authStore';
 import { useDashboardStore } from '../../store/dashboardStore';
 import MetronicLayout from '../../components/layout/MetronicLayout';
-import { 
-  Settings, Loader2, Calendar as CalendarIcon, Wallet, Layers, 
-  CheckCircle, ArrowUpCircle, ArrowDownCircle, Activity, TrendingUp,
-  Stethoscope, Users, Receipt, Clock, Package, GripVertical
+import {
+  Settings, Loader2, Calendar as CalendarIcon, Wallet, Layers,
+  ArrowUpCircle, ArrowDownCircle, Activity, TrendingUp,
+  Stethoscope, Users, Receipt, Clock, GripVertical
 } from 'lucide-react';
 import api from '../../lib/api';
 import { ReportsService, IncomeSummary, TreatmentPerformance } from '../../lib/services/reports.service';
-import { InventoryService } from '../../lib/services/inventory.service';
 import Skeleton from '../../components/ui/Skeleton';
 import { formatCurrency } from '../../lib/utils/formatCurrency';
 
@@ -22,7 +21,6 @@ const AVAILABLE_WIDGETS = [
   { id: 'appointments', label: 'Bugünün Randevuları' },
   { id: 'recent_cash', label: 'Son Tahsilatlar' },
   { id: 'treatment_perf', label: 'Tedavi Performansı' },
-  { id: 'critical_stock', label: 'Kritik Stok Uyarısı' },
   { id: 'quick_actions', label: 'Hızlı Erişim Paneli' },
 ];
 
@@ -42,7 +40,6 @@ export default function DashboardPage() {
   const [treatments, setTreatments] = useState<TreatmentPerformance[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
-  const [criticalItems, setCriticalItems] = useState<any[]>([]);
 
   const fetchData = async () => {
     if (!tenantId) return;
@@ -54,17 +51,15 @@ export default function DashboardPage() {
       const todayEnd = new Date();
       todayEnd.setHours(23, 59, 59, 999);
 
-      const [summaryData, treatmentData, appRes, stockData] = await Promise.all([
+      const [summaryData, treatmentData, appRes] = await Promise.all([
         ReportsService.getIncomeSummary(),
         ReportsService.getTreatmentPerformance(),
         api.get('/appointments', { params: { startDate: todayStart.toISOString(), endDate: todayEnd.toISOString() } }),
-        InventoryService.getDashboardSummary()
       ]);
 
       setSummary(summaryData);
       setTreatments(treatmentData.slice(0, 5)); // Top 5
       setAppointments(appRes.data || []);
-      setCriticalItems(stockData.filter(s => s.isCritical));
 
       // Fetch 5 most recent payments
       const paymentsRes = await api.get('/finance/payments/recent');
@@ -256,28 +251,6 @@ export default function DashboardPage() {
     );
   };
 
-  const renderCriticalStock = () => {
-    return (
-      <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden h-full flex flex-col">
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-red-50/30">
-          <h4 className="text-[14px] font-bold text-red-800 flex items-center gap-2"><Package size={18} /> Kritik Stoklar</h4>
-        </div>
-        <div className="p-4 flex-grow min-h-[200px]">
-          {loading ? <Skeleton className="h-32 w-full" /> : criticalItems.length > 0 ? (
-            <div className="space-y-3">
-               {criticalItems.map(item => (
-                 <div key={item.id} className="p-3 bg-red-50 rounded-xl border border-red-100 flex justify-between items-center">
-                    <span className="text-[12px] font-bold text-red-700">{item.name}</span>
-                    <span className="text-[12px] font-black text-red-700">{item.totalQuantity} {item.unit}</span>
-                 </div>
-               ))}
-            </div>
-          ) : <EmptyState icon={CheckCircle} msg="Tüm stoklar yeterli seviyede." color="emerald" />}
-        </div>
-      </div>
-    );
-  };
-
   const renderQuickActions = () => {
     return (
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl h-full flex flex-col justify-between">
@@ -302,8 +275,6 @@ export default function DashboardPage() {
         return renderTreatmentPerformance();
       case 'recent_cash':
         return renderRecentCash();
-      case 'critical_stock':
-        return renderCriticalStock();
       case 'quick_actions':
         return renderQuickActions();
       default:
@@ -316,7 +287,6 @@ export default function DashboardPage() {
     appointments: 'col-span-1 lg:col-span-2',
     treatment_perf: 'col-span-1 lg:col-span-2',
     recent_cash: 'col-span-1',
-    critical_stock: 'col-span-1',
     quick_actions: 'col-span-1',
   };
 
