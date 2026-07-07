@@ -3,7 +3,7 @@
   "version": "1.1.6",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack --port 7001 --experimental-https --experimental-https-key ../certs/localhost.key --experimental-https-cert ../certs/localhost.crt",
+    "dev": "next dev --webpack --port 7101 --experimental-https --experimental-https-key ../certs/localhost.key --experimental-https-cert ../certs/localhost.crt",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
