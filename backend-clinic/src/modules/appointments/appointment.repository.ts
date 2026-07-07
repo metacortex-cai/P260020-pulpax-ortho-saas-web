@@ -110,27 +110,40 @@ export class AppointmentRepository extends TenantBaseRepository<any, any, any> {
 
   /**
    * Takvim görünümü için tarih aralığına göre randevuları getirir.
-   * Opsiyonel hekim ve ünit filtresi destekler.
+   * Opsiyonel hekim, ünit ve hasta filtresi destekler.
+   * startDate/endDate opsiyoneldir — verilmezse tarih aralığı filtresi
+   * uygulanmaz (geriye dönük uyumluluk: her iki tarih de verildiğinde
+   * davranış birebir aynıdır).
    */
   async findByDateRange(
     clinicId: string,
-    startDate: Date,
-    endDate: Date,
+    startDate?: Date,
+    endDate?: Date,
     doctorId?: string,
     chairId?: string,
+    clinicBranchId?: string,
+    patientId?: string,
   ): Promise<any[]> {
     const delegate = await this.getDelegate();
-    const where: any = {
-      clinicId,
-      startOn: { gte: startDate },
-      endOn: { lte: endDate },
-    };
+    const where: any = { clinicId };
 
+    if (startDate) {
+      where.startOn = { gte: startDate };
+    }
+    if (endDate) {
+      where.endOn = { lte: endDate };
+    }
     if (doctorId) {
       where.doctorId = doctorId;
     }
     if (chairId) {
       where.chairId = chairId;
+    }
+    if (clinicBranchId) {
+      where.clinicBranchId = clinicBranchId;
+    }
+    if (patientId) {
+      where.patientId = patientId;
     }
 
     const appointments = await delegate.findMany({

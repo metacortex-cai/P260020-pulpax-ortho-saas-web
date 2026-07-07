@@ -4,7 +4,6 @@ export const translations = {
   tr: {
     // Navigation
     home: 'Anasayfa',
-    protocolBook: 'Protokol Defteri',
     patientOperations: 'Hasta İşlemleri',
     patients: 'Hastalar',
     appointment: 'Randevu',
@@ -45,6 +44,7 @@ export const translations = {
     integrations: 'Entegrasyonlar',
     documentTemplates: 'Belge ve Şablonlar',
     patientCategories: 'Hasta Kategorileri',
+    clinicBranches: 'Klinikler',
 
     // Reports
     physicianEarningsReport: 'Hekim Hakediş Raporu',
@@ -103,7 +103,6 @@ export const translations = {
   en: {
     // Navigation
     home: 'Dashboard',
-    protocolBook: 'Protocol Book',
     patientOperations: 'Patient Operations',
     patients: 'Patients',
     appointment: 'Appointment',
@@ -144,6 +143,7 @@ export const translations = {
     integrations: 'Integrations',
     documentTemplates: 'Document Templates',
     patientCategories: 'Patient Categories',
+    clinicBranches: 'Clinics',
 
     // Reports
     physicianEarningsReport: 'Physician Earnings Report',

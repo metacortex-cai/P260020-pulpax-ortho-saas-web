@@ -6,6 +6,7 @@ export interface Appointment {
   patientName: string;
   doctorId: string;
   chairId?: string | null;
+  clinicBranchId?: string | null;
   date: string; // YYYY-MM-DD
   startTime: string; // HH:mm
   endTime: string; // HH:mm

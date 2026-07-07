@@ -403,13 +403,20 @@ export class TreatmentsService {
         );
       }
 
-      // Tamamlanmış bir tedavi kalemi yalnızca Süper Admin tarafından silinebilir
-      // (prim/komisyon sistemi kaldırıldı — bkz. scope-reduction kararı).
+      // Tamamlanmış bir tedavi kalemi, primi zaten dağıtılmışsa hiç kimse tarafından
+      // silinemez (ödemesi yapılmış prim kaydını geçersiz kılar); prim dağıtılmamışsa
+      // yalnızca Süper Admin silebilir.
       const completedItemIds = items.filter(item => item.status === 'COMPLETED').map(item => item.id);
-      if (completedItemIds.length > 0 && userRole !== 'SUPERADMIN') {
-        throw new ForbiddenException(
-          'Tamamlanmış bir tedavi kalemini yalnızca Süper Admin silebilir.',
-        );
+      if (completedItemIds.length > 0) {
+        const primmedItem = await tx.primRecord.findFirst({ where: { treatmentItemId: { in: completedItemIds } } });
+        if (primmedItem) {
+          throw new BadRequestException('Ödemesi yapılmış ve primi dağıtılmış bir tedavi kalemi silinemez.');
+        }
+        if (userRole !== 'SUPERADMIN') {
+          throw new ForbiddenException(
+            'Tamamlanmış bir tedavi kalemini yalnızca Süper Admin silebilir.',
+          );
+        }
       }
 
       const patientId = items[0].plan.patientId;
@@ -532,9 +539,13 @@ export class TreatmentsService {
         throw new BadRequestException('Tamamlanmış bir tedavi kalemi tekrar tamamlanamaz.');
       }
 
-      // Tamamlanmış bir kalemin durumu (iptal dahil) değiştiriliyorsa yalnızca
-      // Süper Admin yapabilir (prim/komisyon sistemi kaldırıldı — bkz. scope-reduction kararı).
+      // Tamamlanmış bir kalemin durumu (iptal dahil) değiştiriliyorsa: primi zaten
+      // dağıtılmışsa hiç kimse değiştiremez, dağıtılmamışsa yalnızca Süper Admin yapabilir.
       if (item.status === 'COMPLETED' && updateDto.status !== 'COMPLETED') {
+        const existingPrimRecord = await tx.primRecord.findFirst({ where: { treatmentItemId: itemId } });
+        if (existingPrimRecord) {
+          throw new BadRequestException('Ödemesi yapılmış ve primi dağıtılmış bir tedavi kaleminde değişiklik yapılamaz.');
+        }
         if (userRole !== 'SUPERADMIN') {
           throw new ForbiddenException(
             'Tamamlanmış bir tedavi kaleminin durumunu yalnızca Süper Admin değiştirebilir.',

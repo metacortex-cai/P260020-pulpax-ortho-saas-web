@@ -8,7 +8,6 @@ ALTER TABLE master_treatments ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE tariffs ADD COLUMN IF NOT EXISTS group_name TEXT DEFAULT 'TDB 2026 Tarifesi';
 
 -- 2. Temizle (CASCADE)
-TRUNCATE TABLE protocols CASCADE;
 TRUNCATE TABLE treatment_items CASCADE;
 TRUNCATE TABLE treatment_plans CASCADE;
 TRUNCATE TABLE tariffs CASCADE;

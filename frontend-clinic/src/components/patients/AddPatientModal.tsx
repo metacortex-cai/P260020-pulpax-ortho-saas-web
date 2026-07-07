@@ -11,6 +11,7 @@ import { PatientService } from '../../lib/services/patient.service';
 import { formatEmail, normalizePhone } from '../../lib/utils/formatContact';
 import { COUNTRY_CODES } from '../../lib/utils/countryCodes';
 import { TreatmentService } from '../../lib/services/treatment.service';
+import { ClinicBranchService, ClinicBranch } from '../../lib/services/clinic-branch.service';
 import { useToastStore } from '../../store/toastStore';
 
 interface AddPatientModalProps {
@@ -127,6 +128,7 @@ export default function AddPatientModal({ isOpen, onClose, onSuccess }: AddPatie
 
   const [tariffGroups, setTariffGroups] = useState<any[]>([]);
   const [isLoadingTariffs, setIsLoadingTariffs] = useState(false);
+  const [clinicBranches, setClinicBranches] = useState<ClinicBranch[]>([]);
 
   const [quickAdd, setQuickAdd] = useState<{ isOpen: boolean, type: 'institution' | 'group' | 'family' | null, value: string }>({
     isOpen: false,
@@ -181,8 +183,17 @@ export default function AddPatientModal({ isOpen, onClose, onSuccess }: AddPatie
       })
       .finally(() => { if (mounted) setIsLoadingTariffs(false); });
 
+    ClinicBranchService.findAll()
+      .then((data) => {
+        if (!mounted) return;
+        setClinicBranches(data);
+        // Tek aktif şube varsa formda otomatik seçili gelir (kullanıcı el ile seçmek zorunda kalmaz)
+        if (data.length === 1) setValue('clinicBranchId', data[0].id);
+      })
+      .catch(() => {});
+
     return () => { mounted = false; };
-  }, [addToast]);
+  }, [addToast, setValue]);
 
   const toggleAnamnesis = (item: string) => {
     setAnamnesis(prev => ({
@@ -226,6 +237,7 @@ export default function AddPatientModal({ isOpen, onClose, onSuccess }: AddPatie
         referral: data.reference,
         emergencyName: data.contactPerson,
         emergencyPhone: data.contactPhone,
+        clinicBranchId: data.clinicBranchId || undefined,
         detailedAnamnesis: Object.keys(anamnesis).length > 0 ? anamnesis : undefined,
       };
       // Backend DTO'sunda bulunmayan form-only alanları temizle (whitelist validasyonu bunları reddeder)
@@ -479,6 +491,15 @@ export default function AddPatientModal({ isOpen, onClose, onSuccess }: AddPatie
                         <option key={g.id || g.name} value={g.id || g.name}>{g.name}</option>
                       ))
                     )}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Klinik</label>
+                  <select {...register('clinicBranchId')} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-metronic-primary/20 focus:border-metronic-primary outline-none">
+                    <option value="">Seçiniz...</option>
+                    {clinicBranches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div>

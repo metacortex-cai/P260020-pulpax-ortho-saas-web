@@ -4,7 +4,6 @@ export const translations = {
   tr: {
     // Navigation
     home: 'Anasayfa',
-    protocolBook: 'Protokol Defteri',
     patientOperations: 'Hasta İşlemleri',
     patients: 'Hastalar',
     appointment: 'Randevu',
@@ -90,7 +89,6 @@ export const translations = {
   en: {
     // Navigation
     home: 'Dashboard',
-    protocolBook: 'Protocol Book',
     patientOperations: 'Patient Operations',
     patients: 'Patients',
     appointment: 'Appointment',

@@ -43,11 +43,11 @@ npx prisma generate     # client yenile
 Pulpax'ta tenant izolasyonu DB-per-tenant mimarisiyle sağlanır: `X-Tenant-ID` header'ı middleware'de JWT'deki `tenantId` claim'i ile ezilir (asla client header'ına güvenilmez), controller `@Headers('X-Tenant-ID') clinicId` ile bunu alır ve servise geçirir. Servis, doğru fiziksel veritabanına `TenantPrismaService.getClient()` ile bağlanır; aynı DB içindeki alt-kayıtlarda ise `clinicId` ile sahiplik doğrulanır.
 ```typescript
 // Her service metodunda clinicId parametresi ve sahiplik kontrolü ZORUNLU
-async getImplants(patientId: string, clinicId: string) {
+async getPrescriptions(patientId: string, clinicId: string) {
   const prisma = await this.tenantPrisma.getClient();
   const patient = await prisma.patient.findFirst({ where: { id: patientId, clinicId } });
   if (!patient) throw new NotFoundException('Hasta bulunamadı.');
-  return prisma.implantRecord.findMany({ where: { patientId } });
+  return prisma.patientPrescription.findMany({ where: { patientId } });
 }
 ```
 

@@ -233,7 +233,15 @@ export const OrthodonticsService = {
     return response.data;
   },
 
-  async addAdjustmentVisit(trackId: string, data: Partial<OrthoAdjustmentVisit>): Promise<OrthoAdjustmentVisit> {
+  // ADR-004 §2/§4: appointmentId doluysa backend bağlı randevuyu COMPLETED yapar
+  // (geriye bağlama); scheduleNextAppointment doluysa yeni bir KONTROL randevusu
+  // oluşturur (ileriye bağlama).
+  async addAdjustmentVisit(
+    trackId: string,
+    data: Partial<OrthoAdjustmentVisit> & {
+      scheduleNextAppointment?: { doctorId: string; chairId?: string; startOn: string; endOn: string };
+    },
+  ): Promise<OrthoAdjustmentVisit> {
     const response = await api.post<OrthoAdjustmentVisit>(`/orthodontics/tracks/${trackId}/visits`, data);
     return response.data;
   },

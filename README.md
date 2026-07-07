@@ -35,14 +35,13 @@
 |-------|----------|
 | 🦷 **Hasta Yönetimi** | Hasta kartları, anamnez, fotoğraf, belge yönetimi, reçeteler, kategoriler |
 | 📅 **Randevu Takvimi** | Sürükle-bırak takvim, durum takibi, koltuk yönetimi, SMS hatırlatma |
-| 🔬 **Tedavi & İmplant** | Diş haritası (dental chart), tedavi planları, ICON ortodonti skoru |
+| 🔬 **Tedavi** | Diş haritası (dental chart), tedavi planları, ICON ortodonti skoru |
 | 💰 **Finans Modülü** | Tahsilatlar, giderler, kasa/banka, hasta cari, aday hastalar |
 | 👥 **HR / Personel Modülü** | Personel profili, davet akışı (invite), izin yönetimi, mesai takibi (work hours), prim hesaplama |
 | 🔑 **Kullanıcı Yönetimi** | Sistem kullanıcıları, rol/yetki bazlı erişim (users modülü) |
 | 📦 **Stok Yönetimi** | Malzemeler, demirbaşlar, tedarikçiler, ambar hareketleri |
 | 🧪 **Lab Yönetimi** | Laboratuvar iş akışı, tarifeler, hareket takibi |
 | 🏥 **Resmi Entegrasyonlar** | e-Fatura/e-Arşiv (GİB), e-Reçete, ÜTS (Ürün Takip Sistemi) veri iletimi |
-| 🩻 **AI Radyoloji** | Yapay zeka destekli radyografi analizi |
 | 📊 **Raporlar** | Gelir, tedavi performansı, doktor komisyonları, tahsilat analizi |
 | 🔔 **Bildirimler** | Gerçek zamanlı SSE bildirimleri, dahili mesajlaşma, SMS entegrasyonu |
 | 🏛️ **Multi-Tenant** | Klinik başına ayrı PostgreSQL veritabanı (DB-per-tenant); veritabanı içinde ek savunma katmanı olarak Row-Level Security (RLS) |
@@ -159,7 +158,6 @@ pulpax-react-v.02/
 │       │   ├── hr/               # Personel yönetimi (staff, izin, mesai)
 │       │   ├── inventory/        # Stok yönetimi
 │       │   ├── lab/              # Laboratuvar
-│       │   ├── protocol/         # Protokol yönetimi
 │       │   ├── marketing/        # Pazarlama kampanyaları
 │       │   ├── reports/          # Raporlar
 │       │   ├── support/          # Destek (FAQ, talepler)
@@ -187,13 +185,11 @@ pulpax-react-v.02/
 │   │   │   ├── employees/        # Personel/HR servisi (davet akışı dahil)
 │   │   │   ├── users/            # Sistem kullanıcıları
 │   │   │   ├── medications/      # İlaç/reçete kalemleri
-│   │   │   ├── protocols/        # Protokol yönetimi
 │   │   │   ├── reminders/        # Hatırlatma servisi
 │   │   │   ├── support/          # Destek/talep servisi
 │   │   │   ├── currency/         # Döviz kuru senkronizasyonu
 │   │   │   ├── email/            # E-posta gönderimi
 │   │   │   ├── sms/              # SMS entegrasyonu
-│   │   │   ├── ai/               # AI radyoloji analizi
 │   │   │   ├── efatura/          # e-Fatura / e-Arşiv (GİB) entegrasyonu
 │   │   │   ├── erecete/          # e-Reçete entegrasyonu
 │   │   │   ├── uss/              # ÜTS (Ürün Takip Sistemi) veri iletimi

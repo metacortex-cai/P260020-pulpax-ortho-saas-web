@@ -5,11 +5,13 @@ import { CreateDoctorDto } from './dto/create-doctor.dto';
 import { UpdateDoctorDto } from './dto/update-doctor.dto';
 
 /**
- * Pulpax Ortho: Lab/Stok/İK modülleriyle birlikte kaldırılan Employee modelinin
- * yerini alan minimal Doctor CRUD'u. Yalnızca randevu/tedavi/ortodonti
+ * Pulpax Ortho: minimal Doctor CRUD'u — yalnızca randevu/tedavi/ortodonti
  * ekranlarındaki hekim seçim listelerini ve hekimin kendi hesap bilgilerini
- * (ad/soyad/telefon/unvan/fotoğraf) servis eder — izin/mesai/sözleşme/prim gibi
- * İK özellikleri bilerek yoktur.
+ * (ad/soyad/telefon/unvan/fotoğraf) servis eder; izin/mesai/sözleşme/prim gibi
+ * İK özellikleri bilerek burada yoktur (bkz. EmployeesModule). İK modülü geri
+ * getirildikten sonra isDoctor=true olan Employee kayıtları EmployeesService
+ * tarafından buradaki Doctor kayıtlarına senkronize edilir (Employee.doctorId
+ * köprüsü) — bu CRUD'lar hâlâ doğrudan da (İK dışı) hekim oluşturmak için kullanılabilir.
  */
 @Injectable()
 export class DoctorsService {

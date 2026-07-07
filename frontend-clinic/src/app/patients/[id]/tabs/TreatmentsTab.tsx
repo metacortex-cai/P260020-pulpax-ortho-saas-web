@@ -4,11 +4,13 @@ import { useState, useEffect, useRef } from 'react';
 import {
   ChevronDown, ChevronLeft, ChevronRight, Edit2, Check, X, Loader2,
   Search, Filter, Download, FileText, FileSpreadsheet, ArrowUp, ArrowDown,
-  CheckSquare,
+  CheckSquare, ClipboardCheck, Stethoscope, CalendarClock,
+  Image as ImageIcon, ScanLine, TrendingUp, ShieldCheck,
 } from 'lucide-react';
 import Dropdown from '../../../../components/ui/Dropdown';
 import { TreatmentService } from '../../../../lib/services/treatment.service';
 import { DoctorService, Doctor } from '../../../../lib/services/doctor.service';
+import OrthodonticsSection, { OrthoSectionKey } from './OrthodonticsSection';
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   WAITING:     { label: 'Bekliyor',     cls: 'bg-slate-100 text-slate-500' },
@@ -45,10 +47,22 @@ function SortableHeader({ label, column, sortColumn, sortDirection, onSort }: {
 
 const PAGE_LIMIT_OPTIONS = [10, 25, 50, 100];
 
+type InnerTab = 'planned' | OrthoSectionKey;
+
+const ORTHO_INNER_TABS: { key: OrthoSectionKey; label: string; icon: React.ReactNode }[] = [
+  { key: 'tani', label: 'Tanı', icon: <Stethoscope size={14} /> },
+  { key: 'timeline', label: 'Zaman Çizelgesi', icon: <CalendarClock size={14} /> },
+  { key: 'gallery', label: 'Kayıt Galerisi', icon: <ImageIcon size={14} /> },
+  { key: 'miniscrew', label: 'Mini Vida', icon: <ScanLine size={14} /> },
+  { key: 'growth', label: 'Büyüme Değerlendirmesi', icon: <TrendingUp size={14} /> },
+  { key: 'retention', label: 'Retansiyon', icon: <ShieldCheck size={14} /> },
+];
+
 export default function TreatmentsTab({ patient }: { patient: any }) {
   const [treatments, setTreatments] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [innerTab, setInnerTab] = useState<InnerTab>('planned');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkEditing, setIsBulkEditing] = useState(false);
   const [bulkData, setBulkData] = useState({ status: '', doctorId: '' });
@@ -116,6 +130,8 @@ export default function TreatmentsTab({ patient }: { patient: any }) {
   };
 
   const categories = Array.from(new Set(treatments.map(t => t.category))).filter(Boolean);
+  const hasActiveOrtho = treatments.some(t => t.category === 'Ortodonti');
+  const effectiveInnerTab: InnerTab = innerTab !== 'planned' && !hasActiveOrtho ? 'planned' : innerTab;
 
   const filtered = treatments.filter(t => {
     const matchSearch = !searchTerm || [t.tooth, t.name, t.category, getDoctorName(t.doctor)]
@@ -204,6 +220,38 @@ export default function TreatmentsTab({ patient }: { patient: any }) {
     <div>
       <style>{`@keyframes fadeInDown { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }`}</style>
 
+      {/* ─── İç Sekme Başlığı ─── */}
+      <div className="flex border-b border-slate-200/60 overflow-x-auto no-scrollbar mb-4">
+        <button
+          onClick={() => setInnerTab('planned')}
+          className={`flex items-center gap-2 px-6 py-3 text-[13px] font-bold transition-colors border-b-2 whitespace-nowrap ${
+            effectiveInnerTab === 'planned'
+              ? 'border-metronic-primary text-metronic-primary'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <ClipboardCheck size={14} /> Planlanmış Tedaviler
+        </button>
+        {hasActiveOrtho && ORTHO_INNER_TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setInnerTab(tab.key)}
+            className={`flex items-center gap-2 px-6 py-3 text-[13px] font-bold transition-colors border-b-2 whitespace-nowrap ${
+              effectiveInnerTab === tab.key
+                ? 'border-metronic-primary text-metronic-primary'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {effectiveInnerTab !== 'planned' && (
+        <OrthodonticsSection patient={patient} activeSection={effectiveInnerTab} />
+      )}
+
+      {effectiveInnerTab === 'planned' && (
       <div className="m-card shadow-none border border-slate-200/60 overflow-hidden">
 
         {/* ─── Çoklu seçim bar ─── */}
@@ -418,6 +466,7 @@ export default function TreatmentsTab({ patient }: { patient: any }) {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

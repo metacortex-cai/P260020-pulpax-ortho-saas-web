@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from '../ui/Modal';
-import { Edit2, Trash2, CheckCircle2, XCircle, CalendarClock, Phone, User, Stethoscope, AlertTriangle, ClipboardList } from 'lucide-react';
-import { AppointmentWithPatient } from '../../lib/services/appointment.service';
+import { Edit2, Trash2, CheckCircle2, XCircle, CalendarClock, Phone, User, Stethoscope, AlertTriangle, ClipboardList, Repeat, CalendarX2 } from 'lucide-react';
+import { AppointmentService, AppointmentWithPatient } from '../../lib/services/appointment.service';
 import { formatCurrency } from '../../lib/utils/formatCurrency';
 
 interface AppointmentPopoverProps {
@@ -12,6 +12,8 @@ interface AppointmentPopoverProps {
   onCancel: (id: string) => void;
   onPostpone: (id: string, newDate: string, newStartTime: string, newEndTime: string) => void;
   onEdit: (appointment: AppointmentWithPatient) => void;
+  // ADR-004 §5: seri rozeti ("Seri 3/8") + "bu ve sonraki randevuları iptal et" aksiyonu için.
+  onCancelRemaining?: (seriesId: string, fromAppointmentId: string) => void;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -30,11 +32,23 @@ const APPOINTMENT_TYPE_LABELS: Record<string, string> = {
   TEDAVI: 'Tedavi',
 };
 
-export default function AppointmentPopover({ isOpen, onClose, appointment, onCheckIn, onCancel, onPostpone, onEdit }: AppointmentPopoverProps) {
+export default function AppointmentPopover({ isOpen, onClose, appointment, onCheckIn, onCancel, onPostpone, onEdit, onCancelRemaining }: AppointmentPopoverProps) {
   const [postponing, setPostponing] = useState(false);
   const [newDate, setNewDate] = useState('');
   const [newStartTime, setNewStartTime] = useState('');
   const [newEndTime, setNewEndTime] = useState('');
+  const [seriesTotal, setSeriesTotal] = useState<number | null>(null);
+
+  // Seri rozeti ("Seri 3/8") için toplam occurrence sayısını çeker.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- popover açılışında/randevu değişince sıfırlanır
+    setSeriesTotal(null);
+    if (isOpen && appointment?.seriesId) {
+      AppointmentService.getSeries(appointment.seriesId)
+        .then(series => setSeriesTotal(series.occurrences.length))
+        .catch(() => setSeriesTotal(null));
+    }
+  }, [isOpen, appointment?.seriesId]);
 
   if (!appointment) return null;
 
@@ -80,6 +94,15 @@ export default function AppointmentPopover({ isOpen, onClose, appointment, onChe
               <Trash2 size={15} />
             </button>
             <div className="flex-1" />
+            {!isFinal && appointment.seriesId && onCancelRemaining && (
+              <button
+                onClick={() => onCancelRemaining(appointment.seriesId!, appointment.id)}
+                className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                title="Bu ve sonraki randevuları iptal et"
+              >
+                <CalendarX2 size={14} /> Seriyi İptal Et
+              </button>
+            )}
             {!isFinal && (
               <>
                 <button onClick={startPostpone} className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors">
@@ -166,6 +189,11 @@ export default function AppointmentPopover({ isOpen, onClose, appointment, onChe
             {appointment.type && (
               <span className="px-2.5 py-1 bg-metronic-primary-light dark:bg-metronic-primary/10 text-metronic-primary text-[11px] font-bold rounded-lg uppercase">
                 {APPOINTMENT_TYPE_LABELS[appointment.type] || appointment.type}
+              </span>
+            )}
+            {appointment.seriesId && (
+              <span className="flex items-center gap-1 px-2.5 py-1 bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[11px] font-bold rounded-lg" title="Tekrarlı randevu serisi">
+                <Repeat size={11} /> Seri {appointment.seriesSeq ?? '?'}{seriesTotal != null ? `/${seriesTotal}` : ''}
               </span>
             )}
           </div>

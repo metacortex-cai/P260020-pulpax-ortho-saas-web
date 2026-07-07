@@ -37,7 +37,6 @@ import {
   TrendingUp,
   BarChart3,
   Package,
-  Book,
   Tags,
   FlaskConical,
   UserCircle,
@@ -199,7 +198,6 @@ export default function MetronicLayout({ children, title = '', breadcrumbs = [],
 
   const navItems = [
     { name: t('home'), path: '/dashboard', icon: LayoutDashboard },
-    { name: t('protocolBook'), path: '/protocol', icon: Book },
     { name: t('patientOperations'), icon: Users, subItems: [
       { name: t('patients'), path: '/patients' }
     ]},

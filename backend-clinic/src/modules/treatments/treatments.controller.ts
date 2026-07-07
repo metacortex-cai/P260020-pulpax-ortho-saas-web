@@ -216,7 +216,7 @@ export class TreatmentsController {
   /**
    * PATCH /api/v1/treatments/items/:id/status
    * Tedavi kalemi durumunu günceller.
-   * COMPLETED → Protokol + Prim tetikler.
+   * COMPLETED → Prim tetikler.
    */
   @Patch('items/:id/status')
   updateItemStatus(

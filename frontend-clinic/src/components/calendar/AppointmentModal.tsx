@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import Modal from '../ui/Modal';
 import ConfirmModal from '../ui/ConfirmModal';
-import { Save, AlertTriangle, User, Plus, Trash2, CheckCircle2, History, Stethoscope } from 'lucide-react';
+import { Save, AlertTriangle, User, Plus, Trash2, CheckCircle2, History, Stethoscope, Repeat } from 'lucide-react';
 import { Appointment } from './AppointmentBlock';
 import { TreatmentService, Tariff, TreatmentItem } from '../../lib/services/treatment.service';
 import { AppointmentService } from '../../lib/services/appointment.service';
+import { ClinicBranch } from '../../lib/services/clinic-branch.service';
 import { AppointmentConflictInfo } from '../../lib/types';
 import { useToastStore } from '../../store/toastStore';
 import { formatCurrency } from '../../lib/utils/formatCurrency';
@@ -23,6 +24,7 @@ interface Patient {
 interface Chair {
   id: string;
   name: string;
+  clinicBranchId?: string | null;
 }
 
 // Spec §4.2: yalnızca mevcut durumdan ulaşılabilir sonraki durumlar listelenir
@@ -59,6 +61,56 @@ const TREATMENT_ITEM_STATUS_LABELS: Record<string, string> = {
   IN_PROGRESS: 'Devam Ediyor',
 };
 
+type RepeatFreq = 'WEEKLY' | 'MONTHLY';
+type RepeatEndMode = 'count' | 'until';
+
+// ADR-004 §5: istemci tarafı önizleme — yalnızca görsel özet, otoriter değil
+// (gerçek occurrence üretimi backend'de AppointmentSeriesGenerator'da yapılır,
+// ay-sonu clamp / DST gibi ayrıntıları burada bilinçli olarak basitleştiriyoruz).
+function addRepeatOccurrence(date: Date, freq: RepeatFreq, interval: number, n: number): Date {
+  const d = new Date(date);
+  if (freq === 'WEEKLY') {
+    d.setDate(d.getDate() + interval * 7 * n);
+  } else {
+    d.setMonth(d.getMonth() + interval * n);
+  }
+  return d;
+}
+
+function computeRepeatPreview(
+  startDate: string,
+  startTime: string,
+  freq: RepeatFreq,
+  interval: number,
+  endMode: RepeatEndMode,
+  count: number,
+  until: string,
+): { count: number; firstDate: Date; lastDate: Date } | null {
+  if (!startDate || !startTime || !interval || interval < 1) return null;
+  const start = new Date(`${startDate}T${startTime}:00`);
+  if (Number.isNaN(start.getTime())) return null;
+
+  if (endMode === 'count') {
+    if (!count || count < 1) return null;
+    const capped = Math.min(count, 52);
+    return { count: capped, firstDate: start, lastDate: addRepeatOccurrence(start, freq, interval, capped - 1) };
+  }
+
+  if (!until) return null;
+  const untilDate = new Date(`${until}T23:59:59`);
+  if (Number.isNaN(untilDate.getTime()) || untilDate < start) return null;
+  let n = 0;
+  let last = start;
+  // Güvenlik sınırı — backend SAFETY_CAP'e eş değer, önizlemede sonsuz döngüyü önler.
+  while (n < 200) {
+    const next = addRepeatOccurrence(start, freq, interval, n + 1);
+    if (next > untilDate) break;
+    last = next;
+    n += 1;
+  }
+  return { count: n + 1, firstDate: start, lastDate: last };
+}
+
 interface AppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -67,15 +119,17 @@ interface AppointmentModalProps {
   doctors: Doctor[];
   patients: Patient[];
   chairs?: Chair[];
+  clinicBranches?: ClinicBranch[];
 }
 
-export default function AppointmentModal({ isOpen, onClose, onSave, initialData, doctors, patients = [], chairs = [] }: AppointmentModalProps) {
+export default function AppointmentModal({ isOpen, onClose, onSave, initialData, doctors, patients = [], chairs = [], clinicBranches = [] }: AppointmentModalProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'treatments'>('details');
   const [formData, setFormData] = useState<Partial<Appointment>>({
     patientId: '',
     patientName: '',
     doctorId: '',
     chairId: '',
+    clinicBranchId: '',
     date: '',
     startTime: '',
     endTime: '',
@@ -96,6 +150,14 @@ export default function AppointmentModal({ isOpen, onClose, onSave, initialData,
   const [patientTreatments, setPatientTreatments] = useState<TreatmentItem[]>([]);
   const [selectedTreatmentItemIds, setSelectedTreatmentItemIds] = useState<string[]>([]);
   const [loadingPatientTreatments, setLoadingPatientTreatments] = useState(false);
+
+  // Tekrarla (ADR-004 §5) — yalnızca yeni randevu oluştururken gösterilir.
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [repeatFreq, setRepeatFreq] = useState<RepeatFreq>('WEEKLY');
+  const [repeatInterval, setRepeatInterval] = useState(1);
+  const [repeatEndMode, setRepeatEndMode] = useState<RepeatEndMode>('count');
+  const [repeatCount, setRepeatCount] = useState(4);
+  const [repeatUntil, setRepeatUntil] = useState('');
 
   const [error, setError] = useState('');
   const [workHoursWarning, setWorkHoursWarning] = useState<string | null>(null);
@@ -133,6 +195,7 @@ export default function AppointmentModal({ isOpen, onClose, onSave, initialData,
         patientName: '',
         doctorId: initialData?.doctorId || doctors[0]?.id || '',
         chairId: initialData?.chairId || '',
+        clinicBranchId: initialData?.clinicBranchId || '',
         date: initialData?.date || new Date().toISOString().split('T')[0],
         startTime: initialData?.startTime || '09:00',
         endTime: initialData?.endTime || '09:15',
@@ -148,6 +211,12 @@ export default function AppointmentModal({ isOpen, onClose, onSave, initialData,
     setError('');
     setConflict(null);
     setSaving(false);
+    setRepeatEnabled(false);
+    setRepeatFreq('WEEKLY');
+    setRepeatInterval(1);
+    setRepeatEndMode('count');
+    setRepeatCount(4);
+    setRepeatUntil('');
   }
 
   // Fetch the tariff list from the API whenever the modal opens (genuine external call).
@@ -236,10 +305,21 @@ export default function AppointmentModal({ isOpen, onClose, onSave, initialData,
     }
   };
 
+  const repeatPreview = !initialData?.id && repeatEnabled
+    ? computeRepeatPreview(formData.date || '', formData.startTime || '', repeatFreq, repeatInterval, repeatEndMode, repeatCount, repeatUntil)
+    : null;
+
   const buildPayload = (): Partial<Appointment> => ({
     ...formData,
     ...(appointmentType ? { appointmentType } : {}),
     ...(appointmentType === 'TEDAVI' ? { treatmentItemIds: selectedTreatmentItemIds } : {}),
+    ...(!initialData?.id && repeatEnabled ? {
+      repeat: {
+        freq: repeatFreq,
+        interval: repeatInterval,
+        ...(repeatEndMode === 'count' ? { count: repeatCount } : { until: repeatUntil }),
+      },
+    } : {}),
   } as any);
 
   const submit = async (force: boolean) => {
@@ -470,9 +550,29 @@ export default function AppointmentModal({ isOpen, onClose, onSave, initialData,
 
             <div className="flex items-center gap-4">
               <label className="w-36 flex-shrink-0 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ünit (Diş Koltuğu)</label>
-              <select value={formData.chairId || ''} onChange={e => setFormData({...formData, chairId: e.target.value})} className="m-input flex-1">
+              <select
+                value={formData.chairId || ''}
+                onChange={e => {
+                  const chairId = e.target.value;
+                  const chair = chairs.find(ch => ch.id === chairId);
+                  setFormData({
+                    ...formData,
+                    chairId,
+                    // Ünit seçilince, ünitin bağlı olduğu şube otomatik önerilir (fiziksel olarak zaten o klinikte bulunur)
+                    clinicBranchId: chair?.clinicBranchId || formData.clinicBranchId,
+                  });
+                }}
+                className="m-input flex-1"
+              >
                 <option value="">Belirtilmemiş</option>
                 {chairs.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="w-36 flex-shrink-0 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Klinik</label>
+              <select value={formData.clinicBranchId || ''} onChange={e => setFormData({...formData, clinicBranchId: e.target.value})} className="m-input flex-1">
+                <option value="">Belirtilmemiş</option>
+                {clinicBranches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
             <div className="flex items-center gap-4">
@@ -492,6 +592,82 @@ export default function AppointmentModal({ isOpen, onClose, onSave, initialData,
               <input required type="time" value={formData.endTime || ''} onChange={e => setFormData({...formData, endTime: e.target.value})} className="m-input flex-1" />
             </div>
           </div>
+
+          {!initialData?.id && (
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setRepeatEnabled(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors"
+              >
+                <span className="flex items-center gap-2 text-[12px] font-bold text-slate-600">
+                  <Repeat size={14} /> Tekrarla
+                </span>
+                <span className={`w-9 h-5 rounded-full transition-colors relative ${repeatEnabled ? 'bg-metronic-primary' : 'bg-slate-300'}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${repeatEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </span>
+              </button>
+              {repeatEnabled && (
+                <div className="p-4 space-y-3 border-t border-slate-200">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(['WEEKLY', 'MONTHLY'] as RepeatFreq[]).map(f => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setRepeatFreq(f)}
+                        className={`px-3 py-1.5 rounded-lg border text-[12px] font-bold transition-all ${
+                          repeatFreq === f
+                            ? 'border-metronic-primary bg-metronic-primary/5 text-metronic-primary'
+                            : 'border-slate-200 text-slate-500 hover:border-metronic-primary/50'
+                        }`}
+                      >
+                        {f === 'WEEKLY' ? 'Haftalık' : 'Aylık'}
+                      </button>
+                    ))}
+                    <div className="flex items-center gap-1.5 ml-2">
+                      <span className="text-[12px] text-slate-500 font-medium">Her</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={repeatInterval}
+                        onChange={e => setRepeatInterval(Math.max(1, Number(e.target.value) || 1))}
+                        className="m-input !w-16 !h-8 text-center"
+                      />
+                      <span className="text-[12px] text-slate-500 font-medium">{repeatFreq === 'WEEKLY' ? 'haftada' : 'ayda'} bir</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <label className="flex items-center gap-2 text-[12px] font-semibold text-slate-600 cursor-pointer select-none">
+                      <input type="radio" name="repeatEndMode" checked={repeatEndMode === 'count'} onChange={() => setRepeatEndMode('count')} />
+                      Kaç kez
+                    </label>
+                    {repeatEndMode === 'count' && (
+                      <input
+                        type="number"
+                        min={1}
+                        max={52}
+                        value={repeatCount}
+                        onChange={e => setRepeatCount(Math.min(52, Math.max(1, Number(e.target.value) || 1)))}
+                        className="m-input !w-20 !h-8"
+                      />
+                    )}
+                    <label className="flex items-center gap-2 text-[12px] font-semibold text-slate-600 cursor-pointer select-none">
+                      <input type="radio" name="repeatEndMode" checked={repeatEndMode === 'until'} onChange={() => setRepeatEndMode('until')} />
+                      Bitiş tarihi
+                    </label>
+                    {repeatEndMode === 'until' && (
+                      <input type="date" value={repeatUntil} onChange={e => setRepeatUntil(e.target.value)} className="m-input !w-40 !h-8" />
+                    )}
+                  </div>
+                  {repeatPreview && (
+                    <p className="text-[12px] text-slate-500 font-medium m-0">
+                      {repeatPreview.count} randevu oluşturulacak: {repeatPreview.firstDate.toLocaleDateString('tr-TR')} – {repeatPreview.lastDate.toLocaleDateString('tr-TR')}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Not / Ön Bilgi</label>

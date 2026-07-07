@@ -6,7 +6,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
 import { CreatePatientDocumentDto, UploadPatientDocumentDto } from './dto/patient-document.dto';
-import { CreateImplantDto, UpdateImplantDto } from './dto/implant.dto';
 import { CreateDiagnosisDto } from './dto/diagnosis.dto';
 import { CreatePrescriptionDto } from './dto/prescription.dto';
 import { CreateNoteDto } from './dto/note.dto';
@@ -100,7 +99,7 @@ export class PatientsService {
 
   async findAll(
     clinicId: string,
-    options?: { page?: number; limit?: number; search?: string; sortBy?: string; sortDir?: string },
+    options?: { page?: number; limit?: number; search?: string; sortBy?: string; sortDir?: string; clinicBranchId?: string },
   ) {
     const tenantDb = await this.tenantPrisma.getClient();
 
@@ -113,6 +112,9 @@ export class PatientsService {
 
     const search = options?.search?.trim();
     const where: any = { clinicId }; // Tenant isolation query (redundant check but safe)
+    if (options?.clinicBranchId) {
+      where.clinicBranchId = options.clinicBranchId;
+    }
     if (search) {
       const orConditions: any[] = [
         { firstName: { contains: search, mode: 'insensitive' } },
@@ -325,6 +327,7 @@ export class PatientsService {
     if (data.family !== undefined) updateData.family = data.family;
     if (data.referral !== undefined) updateData.referral = data.referral;
     if (data.assignedDoctor !== undefined) updateData.assignedDoctor = data.assignedDoctor;
+    if (data.clinicBranchId !== undefined) updateData.clinicBranchId = data.clinicBranchId;
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.smsConsent !== undefined) updateData.smsConsent = data.smsConsent;
     if (data.kvkkConsent !== undefined) updateData.kvkkConsent = data.kvkkConsent;
@@ -354,66 +357,6 @@ export class PatientsService {
       updated.nationalId = EncryptionUtil.decrypt(updated.nationalId) || updated.nationalId;
     }
     return updated;
-  }
-
-  // ─── İmplant CRUD ──────────────────────────────────────────────────────────
-
-  async getImplants(patientId: string, clinicId: string) {
-    const prisma = await this.tenantPrisma.getClient();
-    const patient = await prisma.patient.findFirst({ where: { id: patientId, clinicId } });
-    if (!patient) throw new NotFoundException('Hasta bulunamadı.');
-    return prisma.implantRecord.findMany({
-      where: { patientId },
-      orderBy: { implantDate: 'desc' },
-    });
-  }
-
-  async createImplant(patientId: string, dto: CreateImplantDto, clinicId: string) {
-    const prisma = await this.tenantPrisma.getClient();
-    const patient = await prisma.patient.findFirst({ where: { id: patientId, clinicId } });
-    if (!patient) throw new NotFoundException('Hasta bulunamadı.');
-    return prisma.implantRecord.create({
-      data: {
-        patientId,
-        toothNo: dto.toothNo,
-        brand: dto.brand,
-        implantDate: new Date(dto.implantDate),
-        implantLotNo: dto.implantLotNo || '',
-        implantSerialNo: dto.implantSerialNo || '',
-        abutmentDate: dto.abutmentDate ? new Date(dto.abutmentDate) : null,
-        abutmentLotNo: dto.abutmentLotNo || null,
-        abutmentSerialNo: dto.abutmentSerialNo || null,
-        status: dto.status || 'BASARILI',
-      },
-    });
-  }
-
-  async updateImplant(implantId: string, dto: UpdateImplantDto, clinicId: string) {
-    const prisma = await this.tenantPrisma.getClient();
-    const existing = await prisma.implantRecord.findFirst({ where: { id: implantId, patient: { clinicId } } });
-    if (!existing) throw new NotFoundException('İmplant kaydı bulunamadı');
-    return prisma.implantRecord.update({
-      where: { id: implantId },
-      data: {
-        toothNo: dto.toothNo,
-        brand: dto.brand,
-        implantDate: new Date(dto.implantDate),
-        implantLotNo: dto.implantLotNo || '',
-        implantSerialNo: dto.implantSerialNo || '',
-        abutmentDate: dto.abutmentDate ? new Date(dto.abutmentDate) : null,
-        abutmentLotNo: dto.abutmentLotNo || null,
-        abutmentSerialNo: dto.abutmentSerialNo || null,
-        status: dto.status || existing.status,
-      },
-    });
-  }
-
-  async deleteImplant(implantId: string, clinicId: string) {
-    const prisma = await this.tenantPrisma.getClient();
-    const existing = await prisma.implantRecord.findFirst({ where: { id: implantId, patient: { clinicId } } });
-    if (!existing) throw new NotFoundException('İmplant kaydı bulunamadı');
-    await prisma.implantRecord.delete({ where: { id: implantId } });
-    return { success: true };
   }
 
   // ─── Diyagnoz CRUD ─────────────────────────────────────────────────────────

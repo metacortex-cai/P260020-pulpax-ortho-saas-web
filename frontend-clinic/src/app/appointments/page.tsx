@@ -8,11 +8,14 @@ import AppointmentModal from '../../components/calendar/AppointmentModal';
 import AppointmentPopover from '../../components/calendar/AppointmentPopover';
 import PrintCalendarModal from '../../components/calendar/PrintCalendarModal';
 import MiniCalendar from '../../components/calendar/MiniCalendar';
+import LeaveModal from '../../components/calendar/LeaveModal';
 import { Check } from 'lucide-react';
 import { Appointment } from '../../components/calendar/AppointmentBlock';
 import { AppointmentService, AppointmentWithPatient, AppointmentConflictInfo } from '../../lib/services/appointment.service';
 import { DoctorService } from '../../lib/services/doctor.service';
+import { EmployeeService, EmployeeLeave, WorkHourPayload } from '../../lib/services/employee.service';
 import { PatientService } from '../../lib/services/patient.service';
+import { ClinicBranchService, ClinicBranch } from '../../lib/services/clinic-branch.service';
 import { useToastStore } from '../../store/toastStore';
 import InfoTooltip from '../../components/ui/InfoTooltip';
 
@@ -30,6 +33,7 @@ export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [chairs, setChairs] = useState<any[]>([]);
+  const [clinicBranches, setClinicBranches] = useState<ClinicBranch[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,27 +43,40 @@ export default function AppointmentsPage() {
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [popoverAppointment, setPopoverAppointment] = useState<AppointmentWithPatient | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [occupancy, setOccupancy] = useState<{ date: string; total: number; capacityMinutes: number }[]>([]);
+  // leaves/workHours Employee.id yerine Doctor.id ile keylenir (bkz. aşağıdaki
+  // employeeIdByDoctorId eşleştirmesi) — CalendarGrid'in doctorId karşılaştırması
+  // bu sayede değişmeden çalışır.
+  const [leaves, setLeaves] = useState<EmployeeLeave[]>([]);
+  const [workHours, setWorkHours] = useState<Record<string, WorkHourPayload[]>>({});
   const addToast = useToastStore(state => state.addToast);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       
-      // 1. Fetch Doctors & Chairs
-      const [staff, chs] = await Promise.all([
+      // 1. Fetch Doctors, Employees (İK) & Chairs
+      const [staff, employees, chs, branches] = await Promise.all([
         DoctorService.findAll(),
-        AppointmentService.getChairs()
+        EmployeeService.findAll(),
+        AppointmentService.getChairs(),
+        ClinicBranchService.findAll(),
       ]);
+      setClinicBranches(branches);
+
+      // Employee.doctorId köprüsü: takvim rengi (calendarColor) ve izin/mesai
+      // kayıtları Employee (İK) tarafında tutulur, randevu FK'ları ise Doctor'a
+      // bağlıdır — ikisini eşleştirmek için bu map'ler gerekir.
+      const employeeByDoctorId = new Map(employees.filter(e => e.doctorId).map(e => [e.doctorId as string, e]));
+      const employeeIdByDoctorId = new Map(employees.filter(e => e.doctorId).map(e => [e.doctorId as string, e.id]));
 
       const docs = staff
         .filter(s => s.isDoctor)
         .map((s, idx) => ({
           id: s.id,
           name: `Dt. ${s.firstName} ${s.lastName}`,
-          // Personel modülü (ve onunla birlikte hekim rengi ayarı) kaldırıldı;
-          // sabit paletten sırayla renk atanır.
-          color: DOCTOR_COLORS[idx % DOCTOR_COLORS.length]
+          color: employeeByDoctorId.get(s.id)?.calendarColor || DOCTOR_COLORS[idx % DOCTOR_COLORS.length]
         }));
       setDoctors(docs);
       setChairs(chs);
@@ -94,6 +111,7 @@ export default function AppointmentsPage() {
         patientName: `${a.patient.firstName} ${a.patient.lastName}`,
         doctorId: a.doctorId,
         chairId: a.chairId,
+        clinicBranchId: a.clinicBranchId,
         date: a.startOn.split('T')[0],
         startTime: new Date(a.startOn).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
         endTime: new Date(a.endOn).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
@@ -104,6 +122,35 @@ export default function AppointmentsPage() {
       }));
 
       setAppointments(mappedApps);
+
+      // 2b. Fetch leaves (görünür aralıkla kesişenler) + seçili hekimlerin mesai saatleri (spec §2.5/§6.4).
+      // employeeId alanları, CalendarGrid'in doctorId karşılaştırmasıyla uyumlu olsun diye
+      // employeeIdByDoctorId üzerinden Doctor.id'ye çevrilir.
+      const employeeIds = docs.map(d => employeeIdByDoctorId.get(d.id)).filter((id): id is string => !!id);
+      if (employeeIds.length > 0) {
+        try {
+          const [leavesRes, workHoursRes] = await Promise.all([
+            EmployeeService.findAllLeaves(start.toISOString(), end.toISOString()),
+            EmployeeService.getWorkHoursBulk(employeeIds),
+          ]);
+          const doctorIdByEmployeeId = new Map(Array.from(employeeIdByDoctorId.entries()).map(([doctorId, employeeId]) => [employeeId, doctorId]));
+          setLeaves(
+            leavesRes
+              .filter(l => doctorIdByEmployeeId.has(l.employeeId))
+              .map(l => ({ ...l, employeeId: doctorIdByEmployeeId.get(l.employeeId)! })),
+          );
+          setWorkHours(
+            Object.fromEntries(
+              Object.entries(workHoursRes).map(([employeeId, wh]) => [doctorIdByEmployeeId.get(employeeId) || employeeId, wh]),
+            ),
+          );
+        } catch (err) {
+          console.error(err);
+        }
+      } else {
+        setLeaves([]);
+        setWorkHours({});
+      }
 
       // 3. Fetch Patients for modal (randevu modalindeki seçim listesi için sınırlı sayıda kayıt)
       const ptsRes = await PatientService.findAll({ limit: 200, sortBy: 'firstName', sortDir: 'asc' });
@@ -193,6 +240,17 @@ export default function AppointmentsPage() {
     }
   };
 
+  const handleCancelRemaining = async (seriesId: string, fromAppointmentId: string) => {
+    try {
+      const result = await AppointmentService.cancelSeriesRemaining(seriesId, fromAppointmentId);
+      addToast({ title: 'Başarılı', message: `${result.cancelledCount} randevu iptal edildi.`, type: 'success' });
+      handleClosePopover();
+      fetchData();
+    } catch (err: any) {
+      addToast({ title: 'Hata', message: err.response?.data?.message || 'Seri iptal edilemedi.', type: 'error' });
+    }
+  };
+
   const handlePostponeAppointment = async (id: string, newDate: string, newStartTime: string, newEndTime: string) => {
     try {
       const newStartOn = new Date(`${newDate}T${newStartTime}:00`).toISOString();
@@ -259,11 +317,13 @@ export default function AppointmentsPage() {
 
       const appointmentType = (data as any).appointmentType as string | undefined;
       const treatmentItemIds = (data as any).treatmentItemIds as string[] | undefined;
+      const repeat = (data as any).repeat as { freq: 'WEEKLY' | 'MONTHLY'; interval: number; count?: number; until?: string } | undefined;
 
       if (data.id) {
         await AppointmentService.update(data.id, {
           doctorId: data.doctorId,
           chairId: data.chairId || null,
+          clinicBranchId: data.clinicBranchId || undefined,
           patientId: data.patientId,
           startOn,
           endOn,
@@ -273,11 +333,31 @@ export default function AppointmentsPage() {
           ...(appointmentType ? { type: appointmentType } : {})
         });
         addToast({ title: 'Başarılı', message: 'Randevu güncellendi.', type: 'success' });
+      } else if (repeat) {
+        const result = await AppointmentService.createSeries({
+          patientId: data.patientId!,
+          doctorId: data.doctorId!,
+          chairId: data.chairId || undefined,
+          notes: data.notes,
+          startOn,
+          endOn,
+          freq: repeat.freq,
+          interval: repeat.interval,
+          count: repeat.count,
+          until: repeat.until ? new Date(`${repeat.until}T23:59:59`).toISOString() : undefined,
+          force,
+          ...(appointmentType ? { type: appointmentType } : {})
+        });
+        addToast({ title: 'Başarılı', message: `Randevu serisi oluşturuldu: ${result.occurrences.length} randevu.`, type: 'success' });
+        if (result.skipped.length > 0) {
+          addToast({ title: 'Uyarı', message: `${result.skipped.length} randevu ünit çakışması nedeniyle atlandı.`, type: 'warning' });
+        }
       } else {
         await AppointmentService.create({
           patientId: data.patientId!,
           doctorId: data.doctorId!,
           chairId: data.chairId || undefined,
+          clinicBranchId: data.clinicBranchId || undefined,
           startOn,
           endOn,
           notes: data.notes,
@@ -375,6 +455,7 @@ export default function AppointmentsPage() {
             view={view}
             onViewChange={setView}
             onAddAppointment={() => { setModalData(undefined); setIsModalOpen(true); }}
+            onAddLeave={() => setIsLeaveModalOpen(true)}
             onPrintCalendar={() => setIsPrintModalOpen(true)}
           />
 
@@ -384,6 +465,8 @@ export default function AppointmentsPage() {
             appointments={view === 'chair' ? appointments : appointments.filter(a => selectedDoctorIds.has(a.doctorId))}
             doctors={visibleDoctors}
             chairs={chairs}
+            leaves={leaves}
+            workHours={workHours}
             onSlotClick={handleSlotClick}
             onAppointmentClick={handleAppointmentClick}
             onAppointmentMove={handleAppointmentMove}
@@ -391,6 +474,12 @@ export default function AppointmentsPage() {
           />
         </div>
       </div>
+
+      <LeaveModal
+        isOpen={isLeaveModalOpen}
+        onClose={() => setIsLeaveModalOpen(false)}
+        onSaved={fetchData}
+      />
 
       <AppointmentModal
         isOpen={isModalOpen}
@@ -400,6 +489,7 @@ export default function AppointmentsPage() {
         doctors={doctors}
         patients={patients}
         chairs={chairs}
+        clinicBranches={clinicBranches}
       />
 
       <AppointmentPopover
@@ -410,6 +500,7 @@ export default function AppointmentsPage() {
         onCancel={handleCancelAppointment}
         onPostpone={handlePostponeAppointment}
         onEdit={handleEditFromPopover}
+        onCancelRemaining={handleCancelRemaining}
       />
 
       <PrintCalendarModal

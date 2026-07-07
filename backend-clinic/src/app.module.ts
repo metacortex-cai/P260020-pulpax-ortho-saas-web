@@ -12,6 +12,8 @@ import { TreatmentsModule } from './modules/treatments/treatments.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { DoctorsModule } from './modules/doctors/doctors.module';
+import { EmployeesModule } from './modules/employees/employees.module';
+import { ClinicBranchesModule } from './modules/clinic-branches/clinic-branches.module';
 import { UsersModule } from './modules/users/users.module';
 import { CurrencyModule } from './modules/currency/currency.module';
 import { MedicationsModule } from './modules/medications/medications.module';
@@ -27,7 +29,6 @@ import { HealthModule } from './modules/health/health.module';
 import { UssModule } from './modules/uss/uss.module';
 import { EreceteModule } from './modules/erecete/erecete.module';
 import { EfaturaModule } from './modules/efatura/efatura.module';
-import { AiRadiologyModule } from './modules/ai/ai-radiology.module';
 import { OrthodonticsModule } from './modules/orthodontics/orthodontics.module';
 
 
@@ -65,6 +66,8 @@ import { validate } from './common/config/env.validation';
     FinanceModule,
     AppointmentsModule,
     DoctorsModule,
+    EmployeesModule,
+    ClinicBranchesModule,
     UsersModule,
     CurrencyModule,
     MedicationsModule,
@@ -79,7 +82,6 @@ import { validate } from './common/config/env.validation';
     UssModule,
     EreceteModule,
     EfaturaModule,
-    AiRadiologyModule,
     OrthodonticsModule,
   ],
   controllers: [],

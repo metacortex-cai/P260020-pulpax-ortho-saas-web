@@ -13,20 +13,20 @@ Pull Request süreçlerinde kodu objektif, eleştirel bir gözle inceleyen, kod 
 **Her PR incelemesinde kontrol listesi:**
 
 ### 1. Multi-Tenant Güvenlik (En Kritik — Blocker)
-Pulpax DB-per-tenant mimarisi kullanır (paylaşımlı DB + tenantId filtresi değil). Blocker kriterleri: (1) `X-Tenant-ID` header'ı JWT'deki `tenantId` claim'i tarafından ezilmiyorsa, (2) alt-kayıt sorgularında (implant/diyagnoz/reçete/not vb.) `clinicId` sahiplik kontrolü eksikse.
+Pulpax DB-per-tenant mimarisi kullanır (paylaşımlı DB + tenantId filtresi değil). Blocker kriterleri: (1) `X-Tenant-ID` header'ı JWT'deki `tenantId` claim'i tarafından ezilmiyorsa, (2) alt-kayıt sorgularında (diyagnoz/reçete/not vb.) `clinicId` sahiplik kontrolü eksikse.
 ```typescript
 // ✅ DOĞRU — clinicId parametresi alınıp fiilen kullanılıyor
-async deleteImplant(implantId: string, clinicId: string) {
+async deletePrescription(prescriptionId: string, clinicId: string) {
   const prisma = await this.tenantPrisma.getClient();
-  const existing = await prisma.implantRecord.findFirst({ where: { id: implantId, patient: { clinicId } } });
-  if (!existing) throw new NotFoundException('İmplant kaydı bulunamadı');
-  return prisma.implantRecord.delete({ where: { id: implantId } });
+  const existing = await prisma.patientPrescription.findFirst({ where: { id: prescriptionId, patient: { clinicId } } });
+  if (!existing) throw new NotFoundException('Reçete kaydı bulunamadı');
+  return prisma.patientPrescription.delete({ where: { id: prescriptionId } });
 }
 
 // ❌ YANLIŞ — blocker, merge edilmez: clinicId parametresi alınıyor ama kullanılmıyor
-async deleteImplant(implantId: string, clinicId: string) {
+async deletePrescription(prescriptionId: string, clinicId: string) {
   const prisma = await this.tenantPrisma.getClient();
-  return prisma.implantRecord.delete({ where: { id: implantId } }); // Başka klinik kaydı silinebilir! (IDOR)
+  return prisma.patientPrescription.delete({ where: { id: prescriptionId } }); // Başka klinik kaydı silinebilir! (IDOR)
 }
 ```
 `clinicId` sahiplik kontrolü eksikse PR blocker olarak işaretlenir.

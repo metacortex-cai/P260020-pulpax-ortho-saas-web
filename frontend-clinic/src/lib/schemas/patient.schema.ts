@@ -24,6 +24,7 @@ export const patientSchema = z.object({
   zipCode: z.string().optional(),
   address: z.string().optional(),
   tariff: z.string().optional(),
+  clinicBranchId: z.string().optional(),
   institution: z.string().optional(),
   group: z.string().optional(),
   family: z.string().optional(),

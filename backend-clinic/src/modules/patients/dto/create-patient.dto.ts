@@ -102,6 +102,10 @@ export class CreatePatientDto {
 
   @IsOptional()
   @IsString()
+  clinicBranchId?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 
   @IsOptional()

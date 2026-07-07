@@ -1,5 +1,11 @@
 import api from '../api';
-import { Appointment, CreateAppointmentPayload } from '../types';
+import {
+  Appointment,
+  CreateAppointmentPayload,
+  CreateAppointmentSeriesPayload,
+  CreateAppointmentSeriesResult,
+  AppointmentSeries,
+} from '../types';
 
 export type { AppointmentConflictInfo } from '../types';
 
@@ -31,13 +37,14 @@ export interface AppointmentRequest {
 }
 
 export const AppointmentService = {
-  async findAll(startDate?: string, endDate?: string, doctorId?: string, chairId?: string): Promise<AppointmentWithPatient[]> {
+  async findAll(startDate?: string, endDate?: string, doctorId?: string, chairId?: string, clinicBranchId?: string): Promise<AppointmentWithPatient[]> {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
     if (doctorId) params.append('doctorId', doctorId);
     if (chairId) params.append('chairId', chairId);
-    
+    if (clinicBranchId) params.append('clinicBranchId', clinicBranchId);
+
     const response = await api.get<AppointmentWithPatient[]>(`/appointments?${params.toString()}`);
     return response.data;
   },
@@ -53,13 +60,26 @@ export const AppointmentService = {
     return response.data;
   },
 
-  async createChair(payload: { name: string; color?: string }): Promise<any> {
+  async createChair(payload: { name: string; color?: string; clinicBranchId?: string }): Promise<any> {
     const response = await api.post<any>('/appointments/chairs', payload);
     return response.data;
   },
 
-  async findByPatient(patientId: string): Promise<Appointment[]> {
-    const response = await api.get<Appointment[]>(`/patients/${patientId}/appointments`);
+  async updateChair(id: string, payload: { name?: string; color?: string; clinicBranchId?: string; isActive?: boolean }): Promise<any> {
+    const response = await api.patch<any>(`/appointments/chairs/${id}`, payload);
+    return response.data;
+  },
+
+  // ADR-004: `/patients/:id/appointments` hiç var olmadı (backend'de yok) — bu
+  // artık mevcut GET /appointments?patientId=... filtresine yönlendirilir.
+  // startDate/endDate opsiyoneldir; verilmezse hastanın TÜM randevuları döner.
+  async findByPatient(patientId: string, startDate?: string, endDate?: string): Promise<AppointmentWithPatient[]> {
+    const params = new URLSearchParams();
+    params.append('patientId', patientId);
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+
+    const response = await api.get<AppointmentWithPatient[]>(`/appointments?${params.toString()}`);
     return response.data;
   },
 
@@ -70,6 +90,28 @@ export const AppointmentService = {
 
   async create(payload: CreateAppointmentPayload): Promise<Appointment> {
     const response = await api.post<Appointment>('/appointments', payload);
+    return response.data;
+  },
+
+  // ADR-004 §3/§4: Google Calendar tarzı tekrarlı randevu serisi oluşturur.
+  // 201 → { seriesId, occurrences: Appointment[], skipped: [...] }; 409 → mevcut
+  // tekli-randevu çakışma şekliyle birebir (force olmadan hekim çakışması).
+  async createSeries(payload: CreateAppointmentSeriesPayload): Promise<CreateAppointmentSeriesResult> {
+    const response = await api.post<CreateAppointmentSeriesResult>('/appointments/series', payload);
+    return response.data;
+  },
+
+  async getSeries(id: string): Promise<AppointmentSeries> {
+    const response = await api.get<AppointmentSeries>(`/appointments/series/${id}`);
+    return response.data;
+  },
+
+  // ADR-004 §3: "Bu ve sonraki etkinlikler" — fromAppointmentId'nin seriesSeq'inden
+  // itibaren (dahil) seri içindeki tüm occurrence'ları CANCELLED yapar.
+  async cancelSeriesRemaining(seriesId: string, fromAppointmentId: string): Promise<{ cancelledCount: number }> {
+    const response = await api.patch<{ cancelledCount: number }>(`/appointments/series/${seriesId}/cancel-remaining`, {
+      fromAppointmentId,
+    });
     return response.data;
   },
 

@@ -12,7 +12,7 @@
 - FDI tooth notation is expected for dental chart work: adult `11-48`, primary `51-85`.
 - A tooth can have multiple active treatments. UI must aggregate surfaces and show multi-treatment indicators.
 - Duplicate treatment warning is Tooth + Procedure + Surface based.
-- Completed treatment triggers protocol generation and downstream finance/stock/commission effects.
+- Completed treatment triggers downstream finance/stock/commission effects.
 
 ## Finance Rules
 
@@ -21,7 +21,7 @@
 - Advance payments remain unearned until the related treatment is completed.
 - Commission requires completed treatment and collected payment.
 - Partial collections produce proportional commission.
-- Locked invoices and protocol records are reversed, not deleted.
+- Locked invoices are reversed, not deleted.
 
 ## Operations Rules
 
@@ -33,5 +33,5 @@
 
 ## Compliance Rules
 
-- KVKK masking applies to national ID, patient identity, protocol exports, logs, and user-visible fields according to role.
+- KVKK masking applies to national ID, patient identity, logs, and user-visible fields according to role.
 - Audit logs and historical snapshots must preserve original actor, doctor, patient-visible labels, and amounts.

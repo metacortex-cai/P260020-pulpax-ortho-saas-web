@@ -17,6 +17,10 @@ export class UpdateAppointmentDto {
   chairId?: string;
 
   @IsOptional()
+  @IsUUID('4', { message: 'Klinik ID geçerli UUID olmalıdır' })
+  clinicBranchId?: string;
+
+  @IsOptional()
   @IsISO8601({ strict: true }, { message: 'Başlangıç tarihi ISO 8601 formatında olmalıdır' })
   startOn?: string;
 

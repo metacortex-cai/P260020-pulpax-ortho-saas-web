@@ -8,20 +8,22 @@ export class ReportsService {
   /**
    * Gelir özeti: Günlük, Haftalık, Aylık tahsilatlar ve Giderler
    */
-  async getIncomeSummary() {
+  async getIncomeSummary(clinicBranchId?: string) {
     const prisma = await this.tenantPrisma.getClient();
-    
+
     const now = new Date();
     const todayStart = new Date(new Date(now).setHours(0,0,0,0));
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
+    const patientBranchFilter = clinicBranchId ? { patient: { clinicBranchId } } : {};
+
     const [dailyIncome, monthlyIncome, dailyExpense, monthlyExpense] = await Promise.all([
       prisma.payment.aggregate({
-        where: { createdAt: { gte: todayStart } },
+        where: { createdAt: { gte: todayStart }, ...patientBranchFilter },
         _sum: { amount: true }
       }),
       prisma.payment.aggregate({
-        where: { createdAt: { gte: monthStart } },
+        where: { createdAt: { gte: monthStart }, ...patientBranchFilter },
         _sum: { amount: true }
       }),
       prisma.expense.aggregate({
@@ -36,10 +38,12 @@ export class ReportsService {
 
     // Toplam Borç ve Tahsilat Oranı
     const totalDebt = await prisma.patient.aggregate({
+      where: clinicBranchId ? { clinicBranchId } : undefined,
       _sum: { totalDebt: true }
     });
 
     const totalCollected = await prisma.payment.aggregate({
+      where: patientBranchFilter,
       _sum: { amount: true }
     });
 
@@ -59,9 +63,9 @@ export class ReportsService {
   /**
    * Tarih aralığına göre detaylı gelir raporu
    */
-  async getIncomeReport(startDate?: string, endDate?: string) {
+  async getIncomeReport(startDate?: string, endDate?: string, clinicBranchId?: string) {
     const prisma = await this.tenantPrisma.getClient();
-    
+
     const where: any = {};
     if (startDate || endDate) {
       where.createdAt = {};
@@ -72,6 +76,9 @@ export class ReportsService {
       const defaultStart = new Date();
       defaultStart.setMonth(defaultStart.getMonth() - 6);
       where.createdAt = { gte: defaultStart };
+    }
+    if (clinicBranchId) {
+      where.patient = { clinicBranchId };
     }
 
     const payments = await prisma.payment.findMany({
@@ -124,13 +131,70 @@ export class ReportsService {
     }, {} as Record<string, { count: number, totalRevenue: number }>);
 
     return Object.keys(grouped)
-      .map(name => ({ 
-        name, 
+      .map(name => ({
+        name,
         count: grouped[name].count,
         revenue: grouped[name].totalRevenue
       }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10);
+  }
+
+  /**
+   * Hekim performans raporu: PrimRecord bazlı ciro/prim/tedavi sayısı dökümü.
+   * doctorId alanı, tarihsel isimlendirme nedeniyle aslında Employee.id taşır
+   * (frontend EmployeeService.findAll() ile eşleştirir). Lab modülü kapsam
+   * dışı kaldığı için (bkz. HR restorasyon planı) lab maliyeti düşümü yok.
+   */
+  async getDoctorPerformance(startDate?: string, endDate?: string) {
+    const prisma = await this.tenantPrisma.getClient();
+
+    const where: any = {};
+    if (startDate || endDate) {
+      where.calculatedAt = {};
+      if (startDate) where.calculatedAt.gte = new Date(startDate);
+      if (endDate) where.calculatedAt.lte = new Date(endDate);
+    }
+
+    const primRecords = await prisma.primRecord.findMany({
+      where,
+      include: {
+        treatmentItem: {
+          include: {
+            tariff: { include: { masterTreatment: true } },
+          },
+        },
+      },
+    });
+
+    const performance = primRecords.reduce((acc, curr) => {
+      if (!acc[curr.employeeId]) {
+        acc[curr.employeeId] = {
+          doctorId: curr.employeeId,
+          totalRevenue: 0,
+          totalCommission: 0,
+          treatmentCount: 0,
+          treatments: {},
+        };
+      }
+
+      const revenue = Number(curr.treatmentItem.price);
+      const commission = Number(curr.amount);
+      const treatmentName = curr.treatmentItem.tariff.masterTreatment.name;
+
+      acc[curr.employeeId].totalRevenue += revenue;
+      acc[curr.employeeId].totalCommission += commission;
+      acc[curr.employeeId].treatmentCount += 1;
+
+      if (!acc[curr.employeeId].treatments[treatmentName]) {
+        acc[curr.employeeId].treatments[treatmentName] = 0;
+      }
+      acc[curr.employeeId].treatments[treatmentName] += 1;
+
+      return acc;
+    }, {} as Record<string, any>);
+
+    return Object.values(performance).sort((a: any, b: any) => b.totalRevenue - a.totalRevenue);
   }
 
 }

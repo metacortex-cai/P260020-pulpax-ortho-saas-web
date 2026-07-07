@@ -30,20 +30,20 @@ Yazılımın yaşam döngüsü boyunca güvenlik standartlarını zorunlu kılan
 ## Sorumluluklar
 
 ### 1. Multi-Tenant Güvenlik Denetimi (En Kritik)
-Pulpax DB-per-tenant mimarisi kullanır: `TenantMiddleware` (`src/common/middleware/tenant.middleware.ts`) her istekte `X-Tenant-ID` header'ını JWT'deki `tenantId` claim'i ile EZMELİDİR — client'ın gönderdiği header asla ham güvenilmez (2026-07 tarihinde tam bu açık gerçek kodda bulunup düzeltildi: header, JWT'nin önüne geçiyordu). Ayrıca aynı tenant DB içindeki alt-kayıtlarda (implant/diyagnoz/reçete/not vb.) `clinicId`/`patient: { clinicId }` sahiplik kontrolü olmadan sadece `id` ile `findUnique`/`findFirst` yapılması IDOR'a yol açar.
+Pulpax DB-per-tenant mimarisi kullanır: `TenantMiddleware` (`src/common/middleware/tenant.middleware.ts`) her istekte `X-Tenant-ID` header'ını JWT'deki `tenantId` claim'i ile EZMELİDİR — client'ın gönderdiği header asla ham güvenilmez (2026-07 tarihinde tam bu açık gerçek kodda bulunup düzeltildi: header, JWT'nin önüne geçiyordu). Ayrıca aynı tenant DB içindeki alt-kayıtlarda (diyagnoz/reçete/not vb.) `clinicId`/`patient: { clinicId }` sahiplik kontrolü olmadan sadece `id` ile `findUnique`/`findFirst` yapılması IDOR'a yol açar.
 ```typescript
 // DOĞRU — patient sahipliği clinicId ile doğrulanıyor
-async getImplants(patientId: string, clinicId: string) {
+async getPrescriptions(patientId: string, clinicId: string) {
   const prisma = await this.tenantPrisma.getClient();
   const patient = await prisma.patient.findFirst({ where: { id: patientId, clinicId } });
   if (!patient) throw new NotFoundException('Hasta bulunamadı.');
-  return prisma.implantRecord.findMany({ where: { patientId } });
+  return prisma.patientPrescription.findMany({ where: { patientId } });
 }
 
 // YANLIŞ — clinicId parametresi alınıyor ama hiç kullanılmıyor, IDOR
-async getImplants(patientId: string, clinicId: string) {
+async getPrescriptions(patientId: string, clinicId: string) {
   const prisma = await this.tenantPrisma.getClient();
-  return prisma.implantRecord.findMany({ where: { patientId } }); // GÜVENLİK AÇIĞI
+  return prisma.patientPrescription.findMany({ where: { patientId } }); // GÜVENLİK AÇIĞI
 }
 ```
 Her PR'da: (1) `X-Tenant-ID` header'ının JWT ile ezildiğini, (2) her alt-kayıt sorgusunda `clinicId` sahiplik kontrolünün mevcut olduğunu doğrula.

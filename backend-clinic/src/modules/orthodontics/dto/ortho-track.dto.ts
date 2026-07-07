@@ -10,7 +10,10 @@ import {
   IsDateString,
   IsPositive,
   Min,
+  ValidateNested,
+  IsISO8601,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export const ORTHO_TRACK_TYPES = [
   'SABIT',
@@ -76,6 +79,27 @@ export class UpdateOrthoTrackDto {
   notes?: string;
 }
 
+// ADR-004 §2(b) — ileriye bağlama: ziyaret kaydedilirken "sonraki kontrolü
+// takvime düş" paneli doldurulursa gönderilir; OrthodonticsService.addAdjustmentVisit
+// bununla AppointmentsService.create() çağırır (type sabit 'KONTROL').
+export class ScheduleNextAppointmentDto {
+  @IsNotEmpty({ message: 'Doktor ID zorunludur' })
+  @IsUUID('4', { message: 'Doktor ID geçerli bir UUID olmalıdır' })
+  doctorId: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'Ünit ID geçerli bir UUID olmalıdır' })
+  chairId?: string;
+
+  @IsNotEmpty({ message: 'Başlangıç tarihi zorunludur' })
+  @IsISO8601({ strict: true }, { message: 'Başlangıç tarihi ISO 8601 formatında olmalıdır' })
+  startOn: string;
+
+  @IsNotEmpty({ message: 'Bitiş tarihi zorunludur' })
+  @IsISO8601({ strict: true }, { message: 'Bitiş tarihi ISO 8601 formatında olmalıdır' })
+  endOn: string;
+}
+
 export class CreateAdjustmentVisitDto {
   @IsOptional()
   @IsDateString({}, { message: 'Ziyaret tarihi geçerli bir tarih olmalıdır' })
@@ -121,6 +145,11 @@ export class CreateAdjustmentVisitDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ScheduleNextAppointmentDto)
+  scheduleNextAppointment?: ScheduleNextAppointmentDto;
 }
 
 export class CreateActivationLogDto {

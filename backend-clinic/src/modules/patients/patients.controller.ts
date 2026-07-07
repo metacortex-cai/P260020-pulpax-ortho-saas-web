@@ -20,7 +20,6 @@ import { PatientsService } from './patients.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
 import { CreatePatientDocumentDto, UploadPatientDocumentDto } from './dto/patient-document.dto';
-import { CreateImplantDto, UpdateImplantDto } from './dto/implant.dto';
 import { CreateDiagnosisDto } from './dto/diagnosis.dto';
 import { CreatePrescriptionDto } from './dto/prescription.dto';
 import { CreateNoteDto } from './dto/note.dto';
@@ -48,6 +47,7 @@ export class PatientsController {
     @Query('search') search?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortDir') sortDir?: string,
+    @Query('clinicBranchId') clinicBranchId?: string,
   ) {
     return this.patientsService.findAll(clinicId, {
       page: page ? parseInt(page, 10) : undefined,
@@ -55,6 +55,7 @@ export class PatientsController {
       search,
       sortBy,
       sortDir,
+      clinicBranchId,
     });
   }
 
@@ -147,42 +148,6 @@ export class PatientsController {
     @Headers('X-Tenant-ID') clinicId: string,
   ) {
     return this.patientsService.deletePhoto(id, clinicId);
-  }
-
-  // --- Implants ---
-
-  @Get(':id/implants')
-  getImplants(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Headers('X-Tenant-ID') clinicId: string,
-  ) {
-    return this.patientsService.getImplants(id, clinicId);
-  }
-
-  @Post(':id/implants')
-  createImplant(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Headers('X-Tenant-ID') clinicId: string,
-    @Body() dto: CreateImplantDto,
-  ) {
-    return this.patientsService.createImplant(id, dto, clinicId);
-  }
-
-  @Put('implants/:implantId')
-  updateImplant(
-    @Param('implantId', ParseUUIDPipe) implantId: string,
-    @Headers('X-Tenant-ID') clinicId: string,
-    @Body() dto: UpdateImplantDto,
-  ) {
-    return this.patientsService.updateImplant(implantId, dto, clinicId);
-  }
-
-  @Delete('implants/:implantId')
-  deleteImplant(
-    @Param('implantId', ParseUUIDPipe) implantId: string,
-    @Headers('X-Tenant-ID') clinicId: string,
-  ) {
-    return this.patientsService.deleteImplant(implantId, clinicId);
   }
 
   // --- Diyagnoz ---

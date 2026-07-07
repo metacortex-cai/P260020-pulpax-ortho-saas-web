@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { normalizePhone } from '../../lib/utils/formatContact';
 import { useToastStore } from '../../store/toastStore';
+import { ClinicBranchService, ClinicBranch } from '../../lib/services/clinic-branch.service';
 
 // ─── Rol bazlı KVKK maskeleme ───
 // ADMIN ve DOCTOR: tam görünüm
@@ -127,6 +128,12 @@ export default function PatientsPage() {
   // Sıralama (sunucu taraflı)
   const [sortColumn, setSortColumn] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [clinicBranches, setClinicBranches] = useState<ClinicBranch[]>([]);
+  const [branchFilter, setBranchFilter] = useState<string>('');
+
+  useEffect(() => {
+    ClinicBranchService.findAll().then(setClinicBranches).catch(() => {});
+  }, []);
 
   // Arama kutusunu 350ms debounce et — her tuş vuruşunda istek atılmasın
   useEffect(() => {
@@ -141,7 +148,7 @@ export default function PatientsPage() {
 
   const canViewSensitive = SENSITIVE_ROLES.includes(user?.role || '');
 
-  const fetchPatients = useCallback(async (page: number, limit: number, search: string, sortCol: string, sortDir: 'asc' | 'desc') => {
+  const fetchPatients = useCallback(async (page: number, limit: number, search: string, sortCol: string, sortDir: 'asc' | 'desc', clinicBranchId: string) => {
     setLoading(true);
     try {
       const res = await PatientService.findAll({
@@ -150,6 +157,7 @@ export default function PatientsPage() {
         search: search || undefined,
         sortBy: SORT_FIELD_MAP[sortCol] || undefined,
         sortDir,
+        clinicBranchId: clinicBranchId || undefined,
       });
       setPatients(res.data.map(normalizePatient));
       setTotalCount(res.total);
@@ -167,13 +175,18 @@ export default function PatientsPage() {
   useEffect(() => {
     if (!mounted || !user) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount/dep-change pattern
-    fetchPatients(currentPage, pageLimit, debouncedSearch, sortColumn, sortDirection);
-  }, [mounted, user, fetchPatients, currentPage, pageLimit, debouncedSearch, sortColumn, sortDirection]);
+    fetchPatients(currentPage, pageLimit, debouncedSearch, sortColumn, sortDirection, branchFilter);
+  }, [mounted, user, fetchPatients, currentPage, pageLimit, debouncedSearch, sortColumn, sortDirection, branchFilter]);
 
   // Yeni hasta eklendikten sonra listeyi güncelle (sunucudan güncel sayfayı tekrar çek)
   const handlePatientAdded = useCallback(() => {
-    fetchPatients(currentPage, pageLimit, debouncedSearch, sortColumn, sortDirection);
-  }, [fetchPatients, currentPage, pageLimit, debouncedSearch, sortColumn, sortDirection]);
+    fetchPatients(currentPage, pageLimit, debouncedSearch, sortColumn, sortDirection, branchFilter);
+  }, [fetchPatients, currentPage, pageLimit, debouncedSearch, sortColumn, sortDirection, branchFilter]);
+
+  const handleBranchFilterChange = (branchId: string) => {
+    setBranchFilter(branchId);
+    setCurrentPage(1);
+  };
 
   // Sorting toggle (sunucu taraflı)
   const handleSort = (column: string) => {
@@ -337,6 +350,18 @@ export default function PatientsPage() {
               </div>
               <DropdownItem icon={<span className="text-slate-400 text-xs">📅</span>} label="Bu Ay" />
               <DropdownItem icon={<span className="text-slate-400 text-xs">📅</span>} label="Bu Yıl" />
+            </Dropdown>
+
+            {/* Klinik Filtresi */}
+            <Dropdown align="right" trigger={
+              <button className={`flex items-center gap-1.5 h-9 px-3 border rounded-lg text-[13px] font-medium shadow-sm transition-colors ${branchFilter ? 'bg-metronic-primary-light border-metronic-primary/30 text-metronic-primary' : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10 hover:text-metronic-primary'}`}>
+                <Filter size={15} /> {branchFilter ? (clinicBranches.find(b => b.id === branchFilter)?.name || 'Klinik') : 'Klinik'} <ChevronDown size={13} className="opacity-50" />
+              </button>
+            }>
+              <DropdownItem icon={<span className="w-2 h-2 rounded-full bg-slate-300 inline-block" />} label="Tüm Klinikler" onClick={() => handleBranchFilterChange('')} />
+              {clinicBranches.map(b => (
+                <DropdownItem key={b.id} icon={<span className="w-2 h-2 rounded-full bg-metronic-primary inline-block" />} label={b.name} onClick={() => handleBranchFilterChange(b.id)} />
+              ))}
             </Dropdown>
 
             {/* Dışa Aktar Dropdown */}

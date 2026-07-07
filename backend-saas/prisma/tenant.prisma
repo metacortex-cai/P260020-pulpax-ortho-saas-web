@@ -38,31 +38,8 @@ model Patient {
   treatmentPlans TreatmentPlan[]
   payments       Payment[]
   consentLogs    ConsentLog[]
-  implantRecords ImplantRecord[]
 
   @@map("patients")
-}
-
-model ImplantRecord {
-  id               String    @id @default(uuid())
-  patientId        String    @map("patient_id")
-  patient          Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  
-  toothNo          String    @map("tooth_no")
-  brand            String
-  implantDate      DateTime  @map("implant_date")
-  implantLotNo     String    @map("implant_lot_no")
-  implantSerialNo  String    @map("implant_serial_no")
-  
-  abutmentDate     DateTime? @map("abutment_date")
-  abutmentLotNo    String?   @map("abutment_lot_no")
-  abutmentSerialNo String?   @map("abutment_serial_no")
-  
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-
-  @@index([patientId])
-  @@map("implant_records")
 }
 
 model Appointment {
@@ -172,7 +149,6 @@ model TreatmentItem {
 
   // Relationships
   paymentDistributions PaymentDistribution[]
-  protocol             Protocol?
   labOrders            LabOrder[]
   primRecords          PrimRecord[]
 
@@ -180,7 +156,7 @@ model TreatmentItem {
 }
 
 // ----------------------------------------------------------------------
-// 3. PAYMENTS & PROTOCOLS
+// 3. PAYMENTS
 // ----------------------------------------------------------------------
 
 model Payment {
@@ -210,19 +186,6 @@ model PaymentDistribution {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("payment_distributions")
-}
-
-model Protocol {
-  id              String        @id @default(uuid())
-  treatmentItemId String        @unique @map("treatment_item_id")
-  treatmentItem   TreatmentItem @relation(fields: [treatmentItemId], references: [id], onDelete: Cascade)
-
-  protocolNo String @unique @map("protocol_no")
-  ussStatus  String @default("PENDING") @map("uss_status")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("protocols")
 }
 
 // ----------------------------------------------------------------------

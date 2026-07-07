@@ -37,7 +37,18 @@ async function main() {
     'patient_documents',
     'expense_categories',
     'expenses',
-    'ortho_cases'
+    'ortho_cases',
+    'appointment_series',
+    'employees',
+    'employee_leaves',
+    'employee_leave_entitlements',
+    'employee_work_hours',
+    'employee_profiles',
+    'employee_contacts',
+    'employee_documents',
+    'employee_contracts',
+    'prim_records',
+    'doctor_target_ledgers'
   ];
 
   for (const table of tablesWithClinicId) {
@@ -105,18 +116,28 @@ async function main() {
     `);
   }
 
-  // 6. implant_records -> patients
-  if (await tableExists('implant_records')) {
-    console.log('- implant_records tablosu için RLS aktif ediliyor...');
-    await prisma.$executeRawUnsafe(`ALTER TABLE "implant_records" ENABLE ROW LEVEL SECURITY;`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "implant_records" FORCE ROW LEVEL SECURITY;`);
-    await prisma.$executeRawUnsafe(`DROP POLICY IF EXISTS tenant_isolation ON "implant_records";`);
+  // 4. employee_contract_category_rates / employee_contract_item_fees -> employee_contracts
+  const employeeContractChildTables = [
+    'employee_contract_category_rates',
+    'employee_contract_item_fees',
+  ];
+
+  for (const table of employeeContractChildTables) {
+    if (!(await tableExists(table))) {
+      console.log(`- ${table} tablosu bulunamadı, atlanıyor...`);
+      continue;
+    }
+
+    console.log(`- ${table} tablosu için RLS aktif ediliyor...`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY;`);
+    await prisma.$executeRawUnsafe(`DROP POLICY IF EXISTS tenant_isolation ON "${table}";`);
     await prisma.$executeRawUnsafe(`
-      CREATE POLICY tenant_isolation ON "implant_records"
+      CREATE POLICY tenant_isolation ON "${table}"
       USING (EXISTS (
-        SELECT 1 FROM "patients"
-        WHERE "patients".id = patient_id
-          AND "patients".clinic_id = NULLIF(current_setting('app.current_clinic_id', true), '')
+        SELECT 1 FROM "employee_contracts"
+        WHERE "employee_contracts".id = contract_id
+          AND "employee_contracts".clinic_id = NULLIF(current_setting('app.current_clinic_id', true), '')
       ));
     `);
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState, useRef, useEffect, useMemo } from 'react';
+import { ReactNode, useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -11,16 +11,13 @@ import { useUIStore } from '../../store/uiStore';
 import ChatPanel from './ChatPanel';
 import NotificationPanel from './NotificationPanel';
 import AddPatientModal from '../patients/AddPatientModal';
-import IntercomChat from './IntercomChat';
 import { useRealtime } from '../../hooks/useRealtime';
-import api from '../../lib/api';
 import AppointmentModal from '../calendar/AppointmentModal';
 import CommandPalette from './CommandPalette';
 import Modal from '../ui/Modal';
 import { PatientService } from '../../lib/services/patient.service';
 import { DoctorService, Doctor } from '../../lib/services/doctor.service';
 import { Patient } from '../../lib/types';
-import { useToastStore } from '../../store/toastStore';
 import { 
   Globe,
   LayoutDashboard, 
@@ -31,7 +28,6 @@ import {
   ChevronRight,
   Menu,
   Search,
-  MessageSquare,
   Bell,
   ChevronDown,
   LifeBuoy,
@@ -53,11 +49,10 @@ import {
   Sun,
   Zap,
   User as UserIcon,
+  UserCircle,
   Maximize,
   Minimize,
-  Save,
-  Radio,
-  BellRing
+  Save
 } from 'lucide-react';
 
 interface Props {
@@ -73,108 +68,20 @@ export default function MetronicLayout({ children, title = '', breadcrumbs = [],
   const router = useRouter();
   const { user, tenantId, logout } = useAuthStore();
   const { locale, setLocale, t } = useI18nStore();
-  const { notifications, fetchNotifications, markAsRead, setConnected, addNotification, unreadCount } = useNotificationStore();
+  const { fetchNotifications, addNotification, unreadCount } = useNotificationStore();
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLangOpen, setIsLangOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
-  const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  
+
   // Real Data for Modals
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-
-  // Pager System State
-  const [isPagerSenderOpen, setIsPagerSenderOpen] = useState(false);
-  const [pagerUnitId, setPagerUnitId] = useState('');
-  const [pagerMessage, setPagerMessage] = useState('');
-  const [chairs, setChairs] = useState<any[]>([]);
-  const pagerRef = useRef<HTMLDivElement>(null);
-  const addToast = useToastStore(state => state.addToast);
-
-  const playPagerChime = () => {
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-      const ctx = new AudioContextClass();
-      const now = ctx.currentTime;
-      
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(880, now);
-      gain1.gain.setValueAtTime(0.35, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.45);
-      
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(660, now + 0.15);
-      gain2.gain.setValueAtTime(0.35, now + 0.15);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.15);
-      osc2.stop(now + 0.7);
-    } catch (err) {
-      console.warn('Web Audio API chime error:', err);
-    }
-  };
-
-  useEffect(() => {
-    if (!user || !tenantId) return;
-    const loadChairs = async () => {
-      try {
-        const response = await api.get('/appointments/chairs');
-        const data = response.data || [];
-        setChairs(data);
-        if (data.length > 0) {
-          setPagerUnitId(data[0].id);
-        }
-      } catch (err) {
-        console.error('Failed to load chairs in layout:', err);
-      }
-    };
-    loadChairs();
-  }, [user, tenantId]);
-
-  // Pure derivation from notifications — no need for separate state/effect.
-  const activePagers = useMemo(
-    () => notifications.filter(n => n.type === 'PAGER' && !n.isRead),
-    [notifications]
-  );
-
-  const handleSendPagerCall = async () => {
-    if (!pagerUnitId) {
-      addToast({ title: 'Hata', message: 'Lütfen bir ünit seçiniz.', type: 'error' });
-      return;
-    }
-    const unitName = chairs.find(c => c.id === pagerUnitId)?.name || 'Bilinmeyen Ünit';
-    const msgText = pagerMessage.trim() || 'Asistan Desteği';
-    try {
-      await api.post('/notifications/pager', {
-        unit: unitName,
-        message: msgText
-      });
-      addToast({ title: 'Başarılı', message: 'Çağrı gönderildi.', type: 'success' });
-      setIsPagerSenderOpen(false);
-      setPagerMessage('');
-    } catch (err) {
-      console.error(err);
-      addToast({ title: 'Hata', message: 'Çağrı gönderilemedi.', type: 'error' });
-    }
-  };
 
   const profileRef = useRef<HTMLDivElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
@@ -249,57 +156,19 @@ export default function MetronicLayout({ children, title = '', breadcrumbs = [],
   useEffect(() => {
     if (!user) return;
     fetchNotifications();
-
-    const loadChatHistory = async () => {
-      try {
-        const response = await api.get('/notifications/chat/history');
-        setChatMessages(response.data || []);
-      } catch (err) {
-        console.error('Failed to load chat history:', err);
-      }
-    };
-    loadChatHistory();
   }, [user, fetchNotifications]);
 
   useRealtime({
-    onChatMessageReceived: (msg) => {
-      setChatMessages(prev => {
-        if (prev.some(m => m.id === msg.id)) return prev;
-        return [...prev, msg];
-      });
-      if (!isChatOpen) {
-        setChatUnreadCount(prev => prev + 1);
-      }
-    },
     onNotificationReceived: (notif) => {
       addNotification(notif);
-      if (notif.type === 'PAGER') {
-        playPagerChime();
-      }
     }
   });
-
-  const handleSendMessage = async (messageText: string) => {
-    try {
-      const response = await api.post('/notifications/chat', {
-        message: messageText
-      });
-      const newMsg = response.data;
-      setChatMessages(prev => {
-        if (prev.some(m => m.id === newMsg.id)) return prev;
-        return [...prev, newMsg];
-      });
-    } catch (err) {
-      console.error('Failed to send chat message:', err);
-    }
-  };
 
   // Click outside handlers
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) setIsProfileOpen(false);
       if (langRef.current && !langRef.current.contains(e.target as Node)) setIsLangOpen(false);
-      if (pagerRef.current && !pagerRef.current.contains(e.target as Node)) setIsPagerSenderOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -329,9 +198,10 @@ export default function MetronicLayout({ children, title = '', breadcrumbs = [],
     { name: t('appointment'), icon: Calendar, subItems: [ { name: t('appointmentCalendar'), path: '/appointments' }, { name: t('appointmentRequests'), path: '/appointments/requests' } ]},
     { name: t('finance'), icon: CreditCard, subItems: [ { name: t('patientCurrent'), path: '/finance/patient-current' }, { name: t('vaultsAndBanks'), path: '/finance/vaults-banks' } ]},
     { name: t('tariffOperations'), icon: Tags, subItems: [ { name: t('tariffs'), path: '/tariffs' }, { name: t('treatments'), path: '/treatments' } ]},
+    { name: t('humanResources'), icon: UserCircle, subItems: [ { name: t('staff'), path: '/hr/staff' }, { name: t('leaves'), path: '/hr/leaves' } ]},
     { name: t('supportCenter'), icon: LifeBuoy, subItems: [ { name: t('supportTickets'), path: '/support/tickets' }, { name: t('helpCenter'), path: '/support/faq' } ]},
-    { name: t('reports'), icon: BarChart3, subItems: [ { name: t('appointmentCalendar'), path: '/reports/appointments' }, { name: t('collectionsAndPaymentsReport'), path: '/reports/collections' }, { name: t('patientAcquisitionReport'), path: '/reports/acquisition' }, { name: t('treatmentStatisticsReport'), path: '/reports/treatments' }, { name: t('debtorListReport'), path: '/reports/debtors' }, { name: t('cancelledAppointmentAnalysis'), path: '/reports/cancellations' } ]},
-    { name: t('settings'), icon: Settings, subItems: [ { name: t('users'), path: '/settings/users' }, { name: t('roles'), path: '/settings/roles' }, { name: t('clinicInfo'), path: '/settings/clinic' }, { name: t('smsTemplates'), path: '/settings/sms' }, { name: t('documentTemplates'), path: '/settings/templates' }, { name: t('notificationSettings'), path: '/settings/notifications' }, { name: t('financeSettings'), path: '/settings/finance' }, { name: t('auditLogs'), path: '/settings/audit-logs' }, { name: t('dataEntry'), path: '/settings/data-entry' }, { name: t('integrations'), path: '/settings/integrations' }, { name: t('patientCategories'), path: '/settings/patient-categories' } ]}
+    { name: t('reports'), icon: BarChart3, subItems: [ { name: t('appointmentCalendar'), path: '/reports/appointments' }, { name: t('collectionsAndPaymentsReport'), path: '/reports/collections' }, { name: t('patientAcquisitionReport'), path: '/reports/acquisition' }, { name: t('treatmentStatisticsReport'), path: '/reports/treatments' }, { name: t('debtorListReport'), path: '/reports/debtors' }, { name: t('cancelledAppointmentAnalysis'), path: '/reports/cancellations' }, { name: t('physicianPerformanceReport'), path: '/reports/doctor-performance' } ]},
+    { name: t('settings'), icon: Settings, subItems: [ { name: t('users'), path: '/settings/users' }, { name: t('roles'), path: '/settings/roles' }, { name: t('clinicInfo'), path: '/settings/clinic' }, { name: t('clinicBranches'), path: '/settings/branches' }, { name: t('smsTemplates'), path: '/settings/sms' }, { name: t('documentTemplates'), path: '/settings/templates' }, { name: t('notificationSettings'), path: '/settings/notifications' }, { name: t('financeSettings'), path: '/settings/finance' }, { name: t('auditLogs'), path: '/settings/audit-logs' }, { name: t('dataEntry'), path: '/settings/data-entry' }, { name: t('integrations'), path: '/settings/integrations' }, { name: t('patientCategories'), path: '/settings/patient-categories' } ]}
   ];
 
   return (
@@ -440,103 +310,6 @@ export default function MetronicLayout({ children, title = '', breadcrumbs = [],
           </div>
 
           <div className="flex items-center gap-3">
-             {/* Hekim Çağrı Pager Toggle */}
-             <div className="relative" ref={pagerRef}>
-               <button 
-                 onClick={() => setIsPagerSenderOpen(!isPagerSenderOpen)}
-                 className={`w-9 h-9 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 relative ${isPagerSenderOpen ? 'text-metronic-primary bg-slate-100 dark:bg-white/10' : ''}`}
-                 title="Hekim/Ünit Çağrısı Gönder"
-               >
-                 <Radio size={18} className={isPagerSenderOpen ? 'animate-pulse' : ''} />
-               </button>
-               
-               {isPagerSenderOpen && (
-                 <div 
-                   className="absolute right-0 top-full mt-2.5 w-80 bg-white dark:bg-[#1c1f2e] border border-slate-100 dark:border-white/10 p-5 z-50 flex flex-col gap-4 shadow-xl"
-                   style={{
-                     animation: 'profileDropIn 0.2s ease-out',
-                   }}
-                 >
-                   <div className="border-b border-slate-100 dark:border-white/5 pb-2">
-                     <h6 className="text-[14px] font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                       <Radio size={16} className="text-metronic-primary animate-pulse" /> Hekim Çağrısı (Pager)
-                     </h6>
-                     <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">Asistan ve resepsiyona anlık çağrı gönderin.</p>
-                   </div>
-                   
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Bulunduğunuz Ünit</label>
-                     <select 
-                       value={pagerUnitId} 
-                       onChange={e => setPagerUnitId(e.target.value)}
-                       className="m-input text-[13px]"
-                     >
-                       {chairs.length === 0 ? (
-                         <option value="">Ünit Yükleniyor...</option>
-                       ) : (
-                         chairs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
-                       )}
-                     </select>
-                   </div>
-                   
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Hızlı Mesaj / Talep</label>
-                     <div className="grid grid-cols-2 gap-2">
-                       {['Sterilizasyon Talebi', 'Asistan Desteği', 'Hasta Odası Hazır', 'Hekim Bekliyor'].map(preset => (
-                         <button 
-                           key={preset}
-                           type="button"
-                           onClick={() => setPagerMessage(preset)}
-                           className={`px-2 py-1.5 text-[11px] font-bold rounded-lg border text-left truncate transition-all ${
-                             pagerMessage === preset 
-                               ? 'border-metronic-primary bg-metronic-primary/5 text-metronic-primary' 
-                               : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'
-                           }`}
-                         >
-                           {preset}
-                         </button>
-                       ))}
-                     </div>
-                   </div>
-                   
-                   <div className="flex flex-col gap-1.5">
-                     <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Özel Mesaj</label>
-                     <input 
-                       type="text" 
-                       value={pagerMessage}
-                       onChange={e => setPagerMessage(e.target.value)}
-                       placeholder="Çağrı detayını yazın..."
-                       className="m-input text-[13px]"
-                     />
-                   </div>
-                   
-                   <button 
-                     onClick={handleSendPagerCall}
-                     className="w-full flex items-center justify-center gap-2 py-2 bg-metronic-primary text-white rounded-lg text-[13px] font-bold hover:bg-blue-600 transition-colors shadow-sm"
-                   >
-                     <Radio size={15} /> Çağrı Gönder
-                   </button>
-                 </div>
-               )}
-             </div>
-
-             {/* Intercom Chat Toggle */}
-             <button 
-               onClick={() => {
-                 setIsChatOpen(true);
-                 setChatUnreadCount(0);
-               }}
-               className="w-9 h-9 flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 relative"
-               title="Klinik İçi İnterkom"
-             >
-               <MessageSquare size={18} />
-               {chatUnreadCount > 0 && (
-                 <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white ring-2 ring-white dark:ring-[#1c1f2e]">
-                   {chatUnreadCount}
-                 </span>
-               )}
-             </button>
-
              {/* Notifications Toggle & Panel */}
              <div className="relative">
                <button 
@@ -630,52 +403,6 @@ export default function MetronicLayout({ children, title = '', breadcrumbs = [],
           {children}
         </main>
       </div>
-
-      <IntercomChat 
-        isOpen={isChatOpen} 
-        onClose={() => setIsChatOpen(false)} 
-        messages={chatMessages} 
-        onSendMessage={handleSendMessage} 
-      />
-
-      {/* Pager Alarm Notification Overlay */}
-      {activePagers.length > 0 && (
-        <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-3 max-w-sm w-full animate-in fade-in duration-300">
-          {activePagers.map(pager => (
-            <div 
-              key={pager.id} 
-              className="relative p-4 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-500/10 dark:bg-red-950/20 backdrop-blur-md shadow-xl flex gap-3 overflow-hidden animate-pulse border-t-4 border-t-red-600 dark:border-t-red-500"
-            >
-              <div className="absolute inset-0 bg-red-600/5 pointer-events-none animate-ping duration-1000" />
-              
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-600 text-white flex items-center justify-center animate-bounce">
-                <BellRing size={20} />
-              </div>
-              
-              <div className="flex-1 min-w-0 z-10">
-                <h6 className="text-[14px] font-extrabold text-red-700 dark:text-red-400 uppercase tracking-wide">
-                  {pager.title} (Acil Çağrı)
-                </h6>
-                <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 mt-0.5">
-                  {pager.message}
-                </p>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 block font-medium">
-                  {new Date(pager.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                </span>
-              </div>
-              
-              <div className="flex-shrink-0 flex items-start z-10">
-                <button 
-                  onClick={() => markAsRead(pager.id)}
-                  className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold rounded-lg transition-colors shadow-sm"
-                >
-                  Halledildi
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       <AddPatientModal isOpen={isAddPatientModalOpen} onClose={closeAddPatientModal} />
       <AppointmentModal 

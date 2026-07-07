@@ -29,6 +29,7 @@ export const generalPatientSchema = z.object({
   referral: z.string().optional(),
   bloodGroup: z.string().optional(),
   assignedDoctor: z.string().optional(),
+  clinicBranchId: z.string().optional(),
   notes: z.string().optional(),
   smsConsent: z.boolean().default(false),
   kvkkConsent: z.boolean().default(false),

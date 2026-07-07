@@ -10,7 +10,7 @@ import { useToastStore } from '../../../store/toastStore';
 import Skeleton from '../../../components/ui/Skeleton';
 import {
   User, HeartPulse, ClipboardList, Stethoscope,
-  CreditCard, Calendar, FolderOpen, Scroll, StickyNote, History, Activity, AlertTriangle, Loader2, Smile, Microscope
+  CreditCard, Calendar, FolderOpen, Scroll, StickyNote, History, AlertTriangle, Loader2, Microscope
 } from 'lucide-react';
 import Modal from '../../../components/ui/Modal';
 
@@ -25,52 +25,14 @@ import DocumentsTab from './tabs/DocumentsTab';
 import PrescriptionsTab from './tabs/PrescriptionsTab';
 import NotesTab from './tabs/NotesTab';
 import LogTab from './tabs/LogTab';
-import ImplantsTab from './tabs/ImplantsTab';
-import OrthodonticsTab from './tabs/OrthodonticsTab';
 import DiagnosisTab from './tabs/DiagnosisTab';
-import DicomViewer from '../../../components/patients/DicomViewer';
-import AiRadiologyAssistant from '../../../components/patients/AiRadiologyAssistant';
-import api from '../../../lib/api';
-
-function XrayTab({ patient }: { patient: any }) {
-  const [diagnoses, setDiagnoses] = useState<any[]>([]);
-  const [notes, setNotes] = useState<string>('');
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-
-  const handleAnalyze = (imageUrl: string) => {
-    setIsAnalyzing(true);
-    api.post('/ai/radiology/analyze', { imageUrl })
-      .then(res => {
-        setDiagnoses(res.data.diagnoses);
-        setNotes(res.data.notes);
-        setIsAnalyzing(false);
-      })
-      .catch(() => {
-        setIsAnalyzing(false);
-      });
-  };
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2">
-        <DicomViewer onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} />
-      </div>
-      <div className="lg:col-span-1">
-        <AiRadiologyAssistant diagnoses={diagnoses} notes={notes} isAnalyzing={isAnalyzing} />
-      </div>
-    </div>
-  );
-}
 
 const TABS = [
   { id: 'general',    label: 'Genel Bilgiler',   icon: <User size={20} /> },
-  { id: 'xray',       label: 'Röntgen & AI Analizi', icon: <Activity size={20} /> },
   { id: 'anamnesis',  label: 'Anamnez',           icon: <HeartPulse size={20} /> },
   { id: 'diagnosis',  label: 'Diyagnoz',          icon: <Microscope size={20} /> },
   { id: 'plans',      label: 'Tedavi Planları',   icon: <ClipboardList size={20} /> },
   { id: 'treatments', label: 'Tedaviler',          icon: <Stethoscope size={20} /> },
-  { id: 'implants',   label: 'İmplantlar',         icon: <Activity size={20} /> },
-  { id: 'orthodontics', label: 'Ortodonti',        icon: <Smile size={20} /> },
   { id: 'payments',   label: 'Ödemeler',           icon: <CreditCard size={20} /> },
   { id: 'appointments',label: 'Randevular',        icon: <Calendar size={20} /> },
   { id: 'documents',  label: 'Dokümanlar',         icon: <FolderOpen size={20} /> },
@@ -189,13 +151,10 @@ export default function PatientDetailPage() {
     if (!patient) return null;
     switch (activeTab) {
       case 'general':       return <GeneralTab patient={patient} onUpdate={setPatient} />;
-      case 'xray':          return <XrayTab patient={patient} />;
       case 'anamnesis':     return <AnamnesisTab patient={patient} onUpdate={setPatient} />;
       case 'diagnosis':     return <DiagnosisTab patient={patient} />;
       case 'plans':         return <TreatmentPlansTab patient={patient} />;
       case 'treatments':    return <TreatmentsTab patient={patient} />;
-      case 'implants':      return <ImplantsTab patient={patient} />;
-      case 'orthodontics':  return <OrthodonticsTab patient={patient} />;
       case 'payments':      return <PaymentsTab patient={patient} />;
       case 'appointments':  return <AppointmentsTab patient={patient} />;
       case 'documents':     return <DocumentsTab patient={patient} />;

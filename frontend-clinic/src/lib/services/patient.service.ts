@@ -53,6 +53,7 @@ export interface PatientListParams {
   search?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
+  clinicBranchId?: string;
 }
 
 export interface PatientListResult {

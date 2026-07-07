@@ -104,21 +104,6 @@ async function main() {
     `);
   }
 
-  // 4. protocols -> treatment_items
-  if (await tableExists('protocols')) {
-    console.log('- protocols tablosu için RLS aktif ediliyor...');
-    await prisma.$executeRawUnsafe(`ALTER TABLE "protocols" ENABLE ROW LEVEL SECURITY;`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "protocols" FORCE ROW LEVEL SECURITY;`);
-    await prisma.$executeRawUnsafe(`DROP POLICY IF EXISTS tenant_isolation ON "protocols";`);
-    await prisma.$executeRawUnsafe(`
-      CREATE POLICY tenant_isolation ON "protocols"
-      USING (EXISTS (
-        SELECT 1 FROM "treatment_items"
-        WHERE "treatment_items".id = treatment_item_id
-      ));
-    `);
-  }
-
   // 5. lab_orders -> treatment_items
   if (await tableExists('lab_orders')) {
     console.log('- lab_orders tablosu için RLS aktif ediliyor...');
@@ -130,22 +115,6 @@ async function main() {
       USING (EXISTS (
         SELECT 1 FROM "treatment_items"
         WHERE "treatment_items".id = treatment_item_id
-      ));
-    `);
-  }
-
-  // 6. implant_records -> patients
-  if (await tableExists('implant_records')) {
-    console.log('- implant_records tablosu için RLS aktif ediliyor...');
-    await prisma.$executeRawUnsafe(`ALTER TABLE "implant_records" ENABLE ROW LEVEL SECURITY;`);
-    await prisma.$executeRawUnsafe(`ALTER TABLE "implant_records" FORCE ROW LEVEL SECURITY;`);
-    await prisma.$executeRawUnsafe(`DROP POLICY IF EXISTS tenant_isolation ON "implant_records";`);
-    await prisma.$executeRawUnsafe(`
-      CREATE POLICY tenant_isolation ON "implant_records"
-      USING (EXISTS (
-        SELECT 1 FROM "patients"
-        WHERE "patients".id = patient_id
-          AND "patients".clinic_id = NULLIF(current_setting('app.current_clinic_id', true), '')
       ));
     `);
   }

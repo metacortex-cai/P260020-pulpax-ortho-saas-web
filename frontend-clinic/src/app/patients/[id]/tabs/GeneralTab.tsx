@@ -9,6 +9,7 @@ import { generalPatientSchema, GeneralPatientFormData } from '../../../../lib/sc
 import { PatientService } from '../../../../lib/services/patient.service';
 import { DoctorService, Doctor } from '../../../../lib/services/doctor.service';
 import { TreatmentService, Tariff } from '../../../../lib/services/treatment.service';
+import { ClinicBranchService, ClinicBranch } from '../../../../lib/services/clinic-branch.service';
 import { useToastStore } from '../../../../store/toastStore';
 import { COUNTRY_CODES } from '../../../../lib/utils/countryCodes';
 import { formatEmail } from '../../../../lib/utils/formatContact';
@@ -135,6 +136,7 @@ export default function GeneralTab({ patient, onUpdate }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const addToast = useToastStore(state => state.addToast);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [clinicBranches, setClinicBranches] = useState<ClinicBranch[]>([]);
   const [tariffs, setTariffs] = useState<Tariff[]>([]);
   const [tariffGroups, setTariffGroups] = useState<any[]>([]);
   const [isLoadingMeta, setIsLoadingMeta] = useState(false);
@@ -162,11 +164,12 @@ export default function GeneralTab({ patient, onUpdate }: Props) {
   useEffect(() => {
     let mounted = true;
     setIsLoadingMeta(true);
-    Promise.all([DoctorService.findAll(), TreatmentService.getTariffGroups()])
-      .then(([docs, groups]) => {
+    Promise.all([DoctorService.findAll(), TreatmentService.getTariffGroups(), ClinicBranchService.findAll(true)])
+      .then(([docs, groups, branches]) => {
         if (!mounted) return;
         setDoctors(docs.filter((d: Doctor) => d.isDoctor && d.isActive));
         setTariffGroups(groups || []);
+        setClinicBranches(branches || []);
       }).catch((err) => {
       console.error('Failed to load meta:', err);
       addToast({ title: 'Hata', message: 'Veriler yüklenirken hata oluştu.', type: 'error' });
@@ -195,6 +198,7 @@ export default function GeneralTab({ patient, onUpdate }: Props) {
         phone: fullPhone,
         email: data.email ? formatEmail(data.email) : undefined,
         nationalId: data.nationality === 'Türkiye' ? data.tckn : data.passport,
+        clinicBranchId: data.clinicBranchId || undefined,
       };
       // Backend DTO'sunda bulunmayan form-only alanları temizle (whitelist validasyonu bunları reddeder)
       delete payload.tckn;
@@ -400,6 +404,22 @@ export default function GeneralTab({ patient, onUpdate }: Props) {
                   return doc ? `Dt. ${doc.firstName} ${doc.lastName}` : patient.assignedDoctor;
                 }
                 return patient.assignedDoctor;
+              })()}
+            />
+            <FIELD
+              label="Klinik"
+              name="clinicBranchId"
+              type="select"
+              options={clinicBranches.map(b => ({ value: b.id, label: b.name }))}
+              editing={editing}
+              register={register}
+              errors={errors}
+              value={(() => {
+                if (!editing) {
+                  const branch = clinicBranches.find(b => b.id === patient.clinicBranchId);
+                  return branch ? branch.name : patient.clinicBranchId;
+                }
+                return patient.clinicBranchId;
               })()}
             />
             <FIELD label="Dosya No" name="fileNo" editing={editing} register={register} errors={errors} value={patient.fileNo ?? patient.id} disabled />

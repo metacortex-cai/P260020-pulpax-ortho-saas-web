@@ -2,44 +2,63 @@
 
 import { useState, useEffect } from 'react';
 import MetronicLayout from '../../../components/layout/MetronicLayout';
+import Dropdown from '../../../components/ui/Dropdown';
 import { ReportsService, IncomeReportItem } from '../../../lib/services/reports.service';
+import { ClinicBranchService, ClinicBranch } from '../../../lib/services/clinic-branch.service';
 import Skeleton from '../../../components/ui/Skeleton';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { TrendingUp, Calendar } from 'lucide-react';
+import { TrendingUp, Calendar, Filter, ChevronDown } from 'lucide-react';
+
+function DropdownItem({ label, active = false, onClick }: { label: string; active?: boolean; onClick?: () => void }) {
+  return (
+    <button onClick={onClick} className={`w-full flex items-center gap-2.5 px-4 py-2 text-[13px] font-medium transition-colors text-left ${active ? 'text-metronic-primary bg-metronic-primary-light dark:bg-metronic-primary/10 font-bold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-metronic-primary'}`}>
+      {label}
+    </button>
+  );
+}
 
 export default function IncomeReportPage() {
   const [data, setData] = useState<IncomeReportItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clinicBranches, setClinicBranches] = useState<ClinicBranch[]>([]);
+  const [branchFilter, setBranchFilter] = useState('');
+
+  useEffect(() => {
+    ClinicBranchService.findAll().then(setClinicBranches).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // const response = await ReportsService.getIncomeReport(6);
-        // setData(response);
-        setTimeout(() => {
-          setData([
-            { month: '2025-12', totalIncome: 45000 },
-            { month: '2026-01', totalIncome: 52000 },
-            { month: '2026-02', totalIncome: 48000 },
-            { month: '2026-03', totalIncome: 61000 },
-            { month: '2026-04', totalIncome: 59000 },
-            { month: '2026-05', totalIncome: 75000 },
-          ]);
-          setLoading(false);
-        }, 500);
+        const response = await ReportsService.getIncomeDetails(undefined, undefined, branchFilter || undefined);
+        setData(response);
       } catch (error) {
         console.error(error);
+      } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, []);
+  }, [branchFilter]);
 
   const totalIncome = data.reduce((sum, item) => sum + item.totalIncome, 0);
 
   return (
     <MetronicLayout title="Gelir Raporu" breadcrumbs={['Raporlar', 'Gelir Raporu']}>
+      <div className="flex justify-end mb-4">
+        <Dropdown align="right" trigger={
+          <button className={`flex items-center gap-1.5 h-9 px-3 border rounded-lg text-[13px] font-medium shadow-sm transition-colors ${branchFilter ? 'bg-metronic-primary-light border-metronic-primary/30 text-metronic-primary' : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10 hover:text-metronic-primary'}`}>
+            <Filter size={15} /> {branchFilter ? (clinicBranches.find(b => b.id === branchFilter)?.name || 'Klinik') : 'Tüm Klinikler'} <ChevronDown size={13} className="opacity-50" />
+          </button>
+        }>
+          <DropdownItem label="Tüm Klinikler" active={!branchFilter} onClick={() => setBranchFilter('')} />
+          {clinicBranches.map(b => (
+            <DropdownItem key={b.id} label={b.name} active={branchFilter === b.id} onClick={() => setBranchFilter(b.id)} />
+          ))}
+        </Dropdown>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="m-card shadow-sm border border-slate-200/60 p-6 flex flex-col justify-center items-center text-center">
           <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mb-3">

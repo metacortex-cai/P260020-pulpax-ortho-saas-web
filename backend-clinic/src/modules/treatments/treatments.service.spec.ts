@@ -8,8 +8,8 @@ import { AuditLogService } from '../../common/services/audit-log.service';
 
 /**
  * Tamamlanmış bir tedavi kaleminin iptali/hekim değişikliği yetkilendirme
- * kurallarını doğrular (prim/komisyon sistemi kaldırıldı — bkz. scope-reduction
- * kararı; bu kalemler artık yalnızca Süper Admin kısıtına tabidir).
+ * kurallarını doğrular: primi zaten dağıtılmışsa (PrimRecord var) hiç kimse
+ * değiştiremez/silemez; dağıtılmamışsa yalnızca Süper Admin yapabilir.
  */
 describe('TreatmentsService — İptal Yetkilendirme', () => {
   let service: TreatmentsService;
@@ -18,9 +18,16 @@ describe('TreatmentsService — İptal Yetkilendirme', () => {
 
   let treatmentItems: any[];
   let auditLogs: any[];
+  let primRecords: any[];
 
   function makeMockTx() {
     return {
+      primRecord: {
+        findFirst: jest.fn(({ where }: any) => {
+          const ids: string[] = where.treatmentItemId?.in ?? (where.treatmentItemId ? [where.treatmentItemId] : []);
+          return Promise.resolve(primRecords.find((r) => ids.includes(r.treatmentItemId)) || null);
+        }),
+      },
       treatmentItem: {
         findFirst: jest.fn(({ where }: any) => {
           if (where.id) return Promise.resolve(treatmentItems.find((i) => i.id === where.id && i.plan.clinicId === where.plan.clinicId) || null);
@@ -60,6 +67,7 @@ describe('TreatmentsService — İptal Yetkilendirme', () => {
       { id: 'item-pending', status: 'PENDING', doctorId: 'doctor-1', price: 500, planId: 'plan-1', plan: { clinicId, patientId: 'patient-1', status: 'ACTIVE' }, paymentDistributions: [] },
     ];
     auditLogs = [];
+    primRecords = [];
 
     const mockTx = makeMockTx();
     const mockTenantClient = {
@@ -94,6 +102,13 @@ describe('TreatmentsService — İptal Yetkilendirme', () => {
       expect(auditLogs.some((l) => l.action === 'TREATMENT_ITEM_STATUS_ROLLBACK')).toBe(true);
     });
 
+    it('primi zaten dağıtılmış kalemin durumu Superadmin tarafından bile değiştirilemez', async () => {
+      primRecords.push({ treatmentItemId: 'item-completed' });
+      await expect(
+        service.updateItemStatus('item-completed', clinicId, { status: 'CANCELLED' } as any, 'superadmin-1', 'SUPERADMIN'),
+      ).rejects.toThrow('Ödemesi yapılmış ve primi dağıtılmış bir tedavi kaleminde değişiklik yapılamaz.');
+    });
+
     it('tamamlanmamış (PENDING) kalemi standart kullanıcı serbestçe iptal edebilir', async () => {
       const result = await service.updateItemStatus('item-pending', clinicId, { status: 'CANCELLED' } as any, 'user-1', 'ADMIN');
       expect(result.status).toBe('CANCELLED');
@@ -110,6 +125,13 @@ describe('TreatmentsService — İptal Yetkilendirme', () => {
       const result = await service.deleteItems(['item-completed'], clinicId, true, 'superadmin-1', 'SUPERADMIN');
       expect(result.success).toBe(true);
       expect(auditLogs.some((l) => l.action === 'TREATMENT_ITEMS_DELETED')).toBe(true);
+    });
+
+    it('primi zaten dağıtılmış kalem Superadmin tarafından bile silinemez', async () => {
+      primRecords.push({ treatmentItemId: 'item-completed' });
+      await expect(
+        service.deleteItems(['item-completed'], clinicId, true, 'superadmin-1', 'SUPERADMIN'),
+      ).rejects.toThrow('Ödemesi yapılmış ve primi dağıtılmış bir tedavi kalemi silinemez.');
     });
   });
 

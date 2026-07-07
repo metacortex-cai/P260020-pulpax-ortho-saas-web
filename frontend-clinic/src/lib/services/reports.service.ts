@@ -77,21 +77,32 @@ export interface DebtorReportItem {
 }
 
 export const ReportsService = {
-  async getIncomeSummary(): Promise<IncomeSummary> {
-    const response = await api.get<IncomeSummary>('/reports/income/summary');
+  async getIncomeSummary(clinicBranchId?: string): Promise<IncomeSummary> {
+    const params = new URLSearchParams();
+    if (clinicBranchId) params.append('clinicBranchId', clinicBranchId);
+    const response = await api.get<IncomeSummary>(`/reports/income/summary?${params.toString()}`);
     return response.data;
   },
 
-  async getIncomeDetails(startDate?: string, endDate?: string): Promise<IncomeDetail[]> {
+  async getIncomeDetails(startDate?: string, endDate?: string, clinicBranchId?: string): Promise<IncomeDetail[]> {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
+    if (clinicBranchId) params.append('clinicBranchId', clinicBranchId);
     const response = await api.get<IncomeDetail[]>(`/reports/income/details?${params.toString()}`);
     return response.data;
   },
 
   async getTreatmentPerformance(): Promise<TreatmentPerformance[]> {
     const response = await api.get<TreatmentPerformance[]>('/reports/treatments/performance');
+    return response.data;
+  },
+
+  async getDoctorPerformance(startDate?: string, endDate?: string): Promise<any[]> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const response = await api.get<any[]>(`/reports/doctors/performance?${params.toString()}`);
     return response.data;
   },
 

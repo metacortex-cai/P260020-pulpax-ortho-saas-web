@@ -37,7 +37,6 @@ SET client_encoding = 'UTF8';
 
 ALTER TABLE master_treatments ADD COLUMN IF NOT EXISTS category TEXT;
 
-TRUNCATE TABLE protocols CASCADE;
 DELETE FROM treatment_items;
 DELETE FROM treatment_plans;
 DELETE FROM tariffs WHERE clinic_id = 'CLINIC_ID';

@@ -58,6 +58,9 @@ model Patient {
   assignedDoctorRef Doctor? @relation(fields: [assignedDoctor], references: [id])
   notes             String?
 
+  clinicBranchId String?       @map("clinic_branch_id")
+  clinicBranch   ClinicBranch? @relation(fields: [clinicBranchId], references: [id], onDelete: SetNull)
+
   // Consents
   smsConsent       Boolean @default(false) @map("sms_consent")
   kvkkConsent      Boolean @default(false) @map("kvkk_consent")
@@ -77,16 +80,16 @@ model Patient {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relationships
-  appointments   Appointment[]
-  treatmentPlans TreatmentPlan[]
-  payments       Payment[]
-  consentLogs    ConsentLog[]
-  implantRecords ImplantRecord[]
-  documents      PatientDocument[]
-  toothDiagnoses ToothDiagnosis[]
-  prescriptions  PatientPrescription[]
-  clinicalNotes  PatientNote[]
-  orthoCases     OrthoCase[]
+  appointments      Appointment[]
+  appointmentSeries AppointmentSeries[]
+  treatmentPlans    TreatmentPlan[]
+  payments          Payment[]
+  consentLogs       ConsentLog[]
+  documents         PatientDocument[]
+  toothDiagnoses    ToothDiagnosis[]
+  prescriptions     PatientPrescription[]
+  clinicalNotes     PatientNote[]
+  orthoCases        OrthoCase[]
 
   @@unique([clinicId, fileNo])
   @@index([clinicId, createdAt])
@@ -145,30 +148,6 @@ model PatientDocument {
   @@map("patient_documents")
 }
 
-model ImplantRecord {
-  id        String  @id @default(uuid())
-  patientId String  @map("patient_id")
-  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
-
-  toothNo         String   @map("tooth_no")
-  brand           String
-  implantDate     DateTime @map("implant_date")
-  implantLotNo    String   @map("implant_lot_no")
-  implantSerialNo String   @map("implant_serial_no")
-
-  abutmentDate     DateTime? @map("abutment_date")
-  abutmentLotNo    String?   @map("abutment_lot_no")
-  abutmentSerialNo String?   @map("abutment_serial_no")
-
-  status String @default("BASARILI") // BASARILI, BASARISIZ
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([patientId])
-  @@map("implant_records")
-}
-
 model ToothDiagnosis {
   id        String  @id @default(uuid())
   patientId String  @map("patient_id")
@@ -202,6 +181,9 @@ model Appointment {
   chairId     String?      @map("chair_id")
   dentalChair DentalChair? @relation(fields: [chairId], references: [id], onDelete: SetNull)
 
+  clinicBranchId String?       @map("clinic_branch_id")
+  clinicBranch   ClinicBranch? @relation(fields: [clinicBranchId], references: [id], onDelete: SetNull)
+
   status  String   @default("PLANNED")
   type    String?  @map("type") // Randevu türü: MUAYENE | KONTROL | TEDAVI
   startOn DateTime @map("start_on")
@@ -215,6 +197,16 @@ model Appointment {
 
   isOutsideWorkHours Boolean @default(false) @map("is_outside_work_hours")
 
+  // Tekrarlı randevu serisi (ADR-004): seri üyesi ise seriesId dolu, seriesSeq
+  // 1-tabanlı sıra ("3/8" gösterimi için). seriesException=true, bu occurrence
+  // seriden bağımsız olarak taşındı/iptal edildi anlamına gelir (Google
+  // Calendar'daki "yalnızca bu etkinlik" davranışı) — AppointmentsService.update/
+  // updateStatus tarafından set edilir.
+  seriesId        String?            @map("series_id")
+  series          AppointmentSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  seriesSeq       Int?               @map("series_seq")
+  seriesException Boolean            @default(false) @map("series_exception")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -224,7 +216,45 @@ model Appointment {
 
   @@index([clinicId, startOn, endOn])
   @@index([postponedFrom])
+  @@index([seriesId])
   @@map("appointments")
+}
+
+// ADR-004: Google Calendar tarzı tekrarlı randevu serisi. Her occurrence ayrı
+// bir Appointment satırı olarak üretilir (seriesId ile bağlanır) — bu model
+// yalnızca üretim parametrelerini (freq/interval/count/until) ve seri
+// meta-verisini tutar, occurrence'ların kendisini değil.
+model AppointmentSeries {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  patientId String  @map("patient_id")
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  doctorId String @map("doctor_id")
+  doctor   Doctor @relation(fields: [doctorId], references: [id])
+
+  chairId     String?      @map("chair_id")
+  dentalChair DentalChair? @relation(fields: [chairId], references: [id], onDelete: SetNull)
+
+  type            String? // MUAYENE | KONTROL | TEDAVI — her occurrence'a kopyalanır
+  notes           String? @db.Text
+  durationMinutes Int     @map("duration_minutes") // ilk occurrence'tan türetilir, her occurrence'a uygulanır
+
+  freq     String    @map("freq") // WEEKLY | MONTHLY
+  interval Int       @default(1) // "N haftada/ayda bir"
+  count    Int?
+  until    DateTime? @map("until")
+
+  status String @default("ACTIVE") // ACTIVE | CANCELLED
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointments Appointment[]
+
+  @@index([clinicId, patientId])
+  @@map("appointment_series")
 }
 
 model DentalChair {
@@ -236,10 +266,34 @@ model DentalChair {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  appointments Appointment[]
+  clinicBranchId String?       @map("clinic_branch_id")
+  clinicBranch   ClinicBranch? @relation(fields: [clinicBranchId], references: [id], onDelete: SetNull)
+
+  appointments      Appointment[]
+  appointmentSeries AppointmentSeries[]
 
   @@unique([clinicId, name])
   @@map("dental_chairs")
+}
+
+/// Aynı tenant içindeki fiziksel klinik şubeleri (bir hekim birden fazla şubede çalışabilir).
+model ClinicBranch {
+  id        String   @id @default(uuid())
+  clinicId  String   @map("clinic_id")
+  name      String
+  address   String?
+  phone     String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patients     Patient[]
+  appointments Appointment[]
+  dentalChairs DentalChair[]
+
+  @@unique([clinicId, name])
+  @@index([clinicId])
+  @@map("clinic_branches")
 }
 
 // ----------------------------------------------------------------------
@@ -406,6 +460,7 @@ model TreatmentItem {
   paymentDistributions PaymentDistribution[]
   orthoTrack           OrthoTreatmentTrack?
   orthoMiniScrew       OrthoMiniScrewRecord?
+  primRecords          PrimRecord[]
 
   @@index([planId])
   @@index([doctorId])
@@ -479,14 +534,15 @@ model PaymentDistribution {
 }
 
 // ----------------------------------------------------------------------
-// 4. DOCTORS
+// 4. DOCTORS & HR
 // ----------------------------------------------------------------------
-// Pulpax Ortho: Laboratuvar, İnsan Kaynakları (izin/mesai/sözleşme/prim) ve
-// Stok/Depo modülleri kapsam dışı bırakıldı (client scope-reduction kararı).
-// Eski `Employee` modelinin yerini minimal bir `Doctor` modeli alıyor — bu
-// model yalnızca Appointment/TreatmentItem/ToothDiagnosis/
-// Patient.assignedDoctor/OrthoCase için gerçek FK hedefi olma amacıyla var;
-// hiçbir İK ilişkisi (izin, mesai, sözleşme, prim, doküman, iletişim) taşımaz.
+// Pulpax Ortho: Laboratuvar ve Stok/Depo modülleri kapsam dışı kalmaya devam
+// ediyor (client scope-reduction kararı), ancak İnsan Kaynakları (izin/mesai/
+// sözleşme/prim) yeniden eklendi. `Doctor`, Appointment/TreatmentItem/
+// ToothDiagnosis/Patient.assignedDoctor/OrthoCase/AppointmentSeries için tek
+// FK hedefi olmaya devam ediyor; `Employee` ise İK kaydını taşır ve
+// isDoctor=true olduğunda doctorId ile ilgili Doctor kaydına bağlanır
+// (bkz. EmployeesService — bu senkronu tutan taraf orasıdır).
 
 // Master DB'deki User (giriş hesabı) opsiyoneldir — her Doctor'un bir User'ı
 // olmak zorunda değil, her User'ın da bir Doctor'u olmak zorunda değil
@@ -512,14 +568,199 @@ model Doctor {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  appointments     Appointment[]
-  assignedPatients Patient[]
-  treatmentItems   TreatmentItem[]
-  toothDiagnoses   ToothDiagnosis[]
-  orthoCases       OrthoCase[]
+  appointments      Appointment[]
+  appointmentSeries AppointmentSeries[]
+  assignedPatients  Patient[]
+  treatmentItems    TreatmentItem[]
+  toothDiagnoses    ToothDiagnosis[]
+  orthoCases        OrthoCase[]
+
+  // İK modülü geri getirilirken eklendi: Employee (İK kaydı) ile Doctor (klinik FK hedefi)
+  // ayrı modeller olarak yaşamaya devam ediyor; bu ters ilişki köprüyü tamamlar.
+  employee Employee?
 
   @@index([clinicId])
   @@map("doctors")
+}
+
+// Personel/Kullanıcı ayrımı: İK kaydı burada, tenant DB'de yaşıyor. Appointment/TreatmentItem/
+// ToothDiagnosis/Patient.assignedDoctor/OrthoCase FK hedefi olarak Doctor kullanılmaya devam eder;
+// Employee.doctorId, isDoctor=true olan personeli ilgili Doctor kaydına bağlar (bkz. EmployeesService
+// create/update/deactivate — bu alan orada senkronize edilir).
+model Employee {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  // Master DB User.id'ye zayıf referans (farklı fiziksel DB, gerçek FK değil) — bu personelin giriş hesabı varsa dolu.
+  userId String? @unique @map("user_id")
+
+  doctorId String?  @unique @map("doctor_id")
+  doctorRef Doctor? @relation(fields: [doctorId], references: [id])
+
+  firstName  String  @map("first_name")
+  lastName   String  @map("last_name")
+  email      String  @map("email") // encrypted (EncryptionUtil)
+  emailHash  String  @unique @map("email_hash")
+  phone      String?
+  nationalId String? @map("national_id") // encrypted
+  title      String?
+  photoUrl   String? @map("photo_url")
+
+  isDoctor           Boolean   @default(false) @map("is_doctor")
+  isActive           Boolean   @default(true) @map("is_active")
+  deactivatedAt      DateTime? @map("deactivated_at")
+  deactivationReason String?   @map("deactivation_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  leaves            EmployeeLeave[]
+  leaveEntitlements EmployeeLeaveEntitlement[]
+  workHours         EmployeeWorkHour[]
+  profile           EmployeeProfile?
+  contacts          EmployeeContact[]
+  documents         EmployeeDocument[]
+  contracts         EmployeeContract[]
+  primRecords       PrimRecord[]
+  targetLedgers     DoctorTargetLedger[]
+
+  @@index([clinicId])
+  @@map("employees")
+}
+
+model EmployeeLeave {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  startAt DateTime @map("start_at")
+  endAt   DateTime @map("end_at")
+  type    String
+
+  isFullDay   Boolean @default(false) @map("is_full_day")
+  description String? @db.Text
+
+  status          String    @default("PENDING") @map("status") // PENDING, APPROVED, REJECTED
+  approvedBy      String?   @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  rejectionReason String?   @map("rejection_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([clinicId])
+  @@map("employee_leaves")
+}
+
+// ADR-003 Faz 2: yıllık izin hak edişi (bakiye)
+model EmployeeLeaveEntitlement {
+  id         String   @id @default(uuid())
+  clinicId   String   @map("clinic_id")
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  year          Int
+  totalDays     Decimal @default(0.00) @map("total_days")
+  carryOverDays Decimal @default(0.00) @map("carry_over_days")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([clinicId, employeeId, year])
+  @@map("employee_leave_entitlements")
+}
+
+model EmployeeWorkHour {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  dayOfWeek Int     @map("day_of_week")
+  isWorking Boolean @default(true) @map("is_working")
+  startTime String? @map("start_time")
+  endTime   String? @map("end_time")
+
+  @@unique([clinicId, employeeId, dayOfWeek])
+  @@map("employee_work_hours")
+}
+
+// ADR-003: İK modülü — genişletilmiş personel profili (Master DB User'a employeeId ile zayıf referans)
+model EmployeeProfile {
+  id         String   @id @default(uuid())
+  clinicId   String   @map("clinic_id")
+  employeeId String   @unique @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  personnelType String @default("OTHER") @map("personnel_type") // DOCTOR, ASSISTANT, MANAGER, OTHER
+
+  birthDate String? @map("birth_date") // encrypted (EncryptionUtil)
+  bloodType String? @map("blood_type")
+
+  school         String? @map("school")
+  educationField String? @map("education_field")
+  educationLevel String? @map("education_level")
+  graduationYear Int?    @map("graduation_year")
+  diplomaNo      String? @map("diploma_no") // sadece DOCTOR
+
+  department     String?   @map("department")
+  position       String?   @map("position")
+  hireDate       DateTime? @map("hire_date")
+  employmentType String?   @map("employment_type")
+
+  sgkRegistryNo String? @map("sgk_registry_no") // encrypted
+
+  calendarColor String? @map("calendar_color") // sadece DOCTOR
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([clinicId])
+  @@map("employee_profiles")
+}
+
+// ADR-003: personel bazlı çoklu iletişim bilgisi (telefon/email/adres/acil durum kişisi)
+model EmployeeContact {
+  id         String   @id @default(uuid())
+  clinicId   String   @map("clinic_id")
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  type  String // PHONE, EMAIL, ADDRESS, EMERGENCY_CONTACT
+  value String
+  label String?
+
+  emergencyName     String? @map("emergency_name")
+  emergencyRelation String? @map("emergency_relation")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([clinicId, employeeId])
+  @@map("employee_contacts")
+}
+
+// ADR-003: personel dokümanları (PatientDocument ile aynı desen)
+model EmployeeDocument {
+  id         String   @id @default(uuid())
+  clinicId   String   @map("clinic_id")
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  name        String
+  fileType    String  @map("file_type")
+  category    String // DIPLOMA, SOZLESME, KIMLIK, SERTIFIKA, DIGER
+  fileUrl     String  @map("file_url")
+  fileSize    Int?    @map("file_size")
+  description String?
+
+  uploadedBy String?  @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([clinicId, employeeId])
+  @@map("employee_documents")
 }
 
 // ----------------------------------------------------------------------
@@ -593,6 +834,111 @@ model ClinicInvoice {
   createdAt DateTime  @default(now()) @map("created_at")
 
   @@map("clinic_invoices")
+}
+
+// ----------------------------------------------------------------------
+// 7. EMPLOYEE CONTRACTS & PRIM RECORDS
+// ----------------------------------------------------------------------
+
+model EmployeeContract {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  version    Int       @default(1)
+  type       String // MODEL_1, MODEL_2, MODEL_3, MODEL_4 (ADR-003 Faz 3 — 4 prim modeli)
+  rate       Decimal   @default(0.00) // rateMode=BULK iken kullanılan toplu oran (%)
+  conditions String?
+  validFrom  DateTime  @map("valid_from")
+  validUntil DateTime? @map("valid_until")
+
+  fixedSalary Decimal @default(0.00) @map("fixed_salary")
+  rateMode    String  @default("BULK") @map("rate_mode") // BULK, CATEGORY
+
+  targetEnabled   Boolean  @default(false) @map("target_enabled")
+  targetAmount    Decimal? @map("target_amount")
+  targetCarryOver Boolean  @default(false) @map("target_carry_over")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  primRecords   PrimRecord[]
+  categoryRates EmployeeContractCategoryRate[]
+  itemFees      EmployeeContractItemFee[]
+
+  @@index([clinicId])
+  @@map("employee_contracts")
+}
+
+// ADR-003 Faz 3: rateMode=CATEGORY iken kategori bazlı prim oranları (Model-1/2/3)
+model EmployeeContractCategoryRate {
+  id         String           @id @default(uuid())
+  contractId String           @map("contract_id")
+  contract   EmployeeContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  category String // MasterTreatment.category ile eşleşir
+  rate     Decimal
+
+  @@unique([contractId, category])
+  @@map("employee_contract_category_rates")
+}
+
+// ADR-003 Faz 3: Model-4 için tedavi kalemi bazlı sabit ücret
+model EmployeeContractItemFee {
+  id         String           @id @default(uuid())
+  contractId String           @map("contract_id")
+  contract   EmployeeContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  masterTreatmentId String  @map("master_treatment_id")
+  fixedFee          Decimal @map("fixed_fee")
+
+  @@unique([contractId, masterTreatmentId])
+  @@map("employee_contract_item_fees")
+}
+
+model PrimRecord {
+  id       String @id @default(uuid())
+  clinicId String @map("clinic_id")
+
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  treatmentItemId String        @map("treatment_item_id")
+  treatmentItem   TreatmentItem @relation(fields: [treatmentItemId], references: [id])
+
+  contractId String           @map("contract_id")
+  contract   EmployeeContract @relation(fields: [contractId], references: [id])
+
+  amount                Decimal
+  period                String   @default("") @map("period") // "YYYY-MM" — hedef sistemi mutabakatı için
+  status                String   @default("CONFIRMED") @map("status") // PROVISIONAL, CONFIRMED, VOID
+  paymentDistributionId String?  @map("payment_distribution_id")
+  calculatedAt          DateTime @default(now()) @map("calculated_at")
+  idempotencyKey        String   @unique @map("idempotency_key")
+
+  @@index([clinicId])
+  @@index([clinicId, employeeId, period])
+  @@map("prim_records")
+}
+
+// ADR-003 Faz 3: hedef bazlı prim sistemi için aylık ciro/hedef takibi
+model DoctorTargetLedger {
+  id         String   @id @default(uuid())
+  clinicId   String   @map("clinic_id")
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  period          String    @map("period") // "YYYY-MM"
+  targetAmount    Decimal   @map("target_amount")
+  actualRevenue   Decimal   @default(0.00) @map("actual_revenue")
+  achieved        Boolean   @default(false)
+  carriedFromPrev Decimal   @default(0.00) @map("carried_from_prev")
+  carriedToNext   Decimal   @default(0.00) @map("carried_to_next")
+  reconciledAt    DateTime? @map("reconciled_at")
+
+  @@unique([clinicId, employeeId, period])
+  @@map("doctor_target_ledgers")
 }
 
 // ----------------------------------------------------------------------

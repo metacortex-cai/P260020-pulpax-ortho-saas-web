@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -9,6 +10,10 @@ import { AppointmentRepository } from './appointment.repository';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
+import {
+  CreateAppointmentSeriesDto,
+  APPOINTMENT_SERIES_MAX_UNTIL_YEARS,
+} from './dto/create-appointment-series.dto';
 import {
   AppointmentCreatedEvent,
   AppointmentCompletedEvent,
@@ -60,6 +65,80 @@ function formatLocalDate(d: Date): string {
   return getClinicDateParts(d).ymd;
 }
 
+/**
+ * getClinicDateParts ile aynı Intl dönüşümünü kullanarak klinik yerel
+ * saatindeki tarih/saat bileşenlerini sayısal olarak döner (yıl/ay/gün/saat/
+ * dakika) — ADR-004 tekrarlı randevu serisi occurrence üretiminde ay
+ * ilerletme/gün clamp işlemleri için (bkz. addMonthlyOccurrence).
+ */
+function getClinicDateFields(d: Date): { year: number; month: number; day: number; hour: number; minute: number } {
+  const { ymd, hhmm } = getClinicDateParts(d);
+  const [year, month, day] = ymd.split('-').map(Number);
+  const [hour, minute] = hhmm.split(':').map(Number);
+  return { year, month, day, hour, minute };
+}
+
+/**
+ * Klinik saat diliminin (Europe/Istanbul) verilen an için UTC ofsetini
+ * dakika cinsinden döner. Sabit bir sayı hardcode etmek yerine Intl'den
+ * türetilir; Türkiye 2016'dan beri DST uygulamıyor (sabit UTC+3) ama bu
+ * yaklaşım politika değişse dahi doğru sonuç üretmeye devam eder.
+ */
+function getClinicUtcOffsetMinutes(d: Date): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLINIC_TIME_ZONE,
+    timeZoneName: 'shortOffset',
+  }).formatToParts(d);
+  const tzName = parts.find((p) => p.type === 'timeZoneName')?.value || 'GMT+0';
+  const match = tzName.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+  if (!match) return 0;
+  const sign = match[1] === '-' ? -1 : 1;
+  const hours = Number(match[2]);
+  const minutes = Number(match[3] || 0);
+  return sign * (hours * 60 + minutes);
+}
+
+/**
+ * Klinik yerel saatindeki (Europe/Istanbul) yıl/ay/gün/saat/dakika
+ * bileşenlerinden karşılık gelen UTC Date nesnesini üretir — getClinicDateParts'ın
+ * tersi yönü; MONTHLY occurrence üretiminde hedef ay/gün'ü somut bir Date'e
+ * çevirmek için kullanılır.
+ */
+function clinicLocalToUtcDate(year: number, month: number, day: number, hour: number, minute: number): Date {
+  const guess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0));
+  const offsetMinutes = getClinicUtcOffsetMinutes(guess);
+  return new Date(guess.getTime() - offsetMinutes * 60 * 1000);
+}
+
+/**
+ * ADR-004 §3: WEEKLY occurrence — önceki occurrence'ın takvim gününe
+ * interval*7 gün eklenir, saat/dakika (ve dolayısıyla süre) korunur. Sabit
+ * ofsetli (DST'siz) klinik saat dilimi varsayımı altında gün eklemek, UTC
+ * milisaniyeye 7*interval gün eklemekle eşdeğerdir.
+ */
+function addWeeklyOccurrence(prev: Date, interval: number): Date {
+  return new Date(prev.getTime() + interval * 7 * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * ADR-004 §3: MONTHLY occurrence — ay `interval` kadar ilerletilir. Hedef
+ * gün HER ZAMAN dizinin ilk occurrence'ının (firstStart) gün-of-ay
+ * değeridir — occurrence'lar birbirinden değil, her zaman ilk occurrence'tan
+ * türetilir (cascading yapılmaz), böylece ör. 31 Ocak + aylık: Şub 28, Mar
+ * 31, Nis 30... elde edilir (Şubat'ın clamp edilmiş 28'inden Mart'a
+ * geçildiğinde 31'e "geri dönebilir"). Hedef ayın son gününden büyükse o
+ * ayın son gününe clamp edilir (ör. 31 Ocak + 1 ay → 28/29 Şubat).
+ */
+function addMonthlyOccurrence(firstStart: Date, occurrenceIndex: number, interval: number): Date {
+  const { year, month, day, hour, minute } = getClinicDateFields(firstStart);
+  const totalMonths = month - 1 + occurrenceIndex * interval;
+  const targetYear = year + Math.floor(totalMonths / 12);
+  const targetMonthIndex = ((totalMonths % 12) + 12) % 12;
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonthIndex + 1, 0)).getUTCDate();
+  const targetDay = Math.min(day, lastDayOfTargetMonth);
+  return clinicLocalToUtcDate(targetYear, targetMonthIndex + 1, targetDay, hour, minute);
+}
+
 @Injectable()
 export class AppointmentsService {
   private readonly logger = new Logger(AppointmentsService.name);
@@ -68,6 +147,10 @@ export class AppointmentsService {
     private readonly repo: AppointmentRepository,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  private formatTimeOfDay(d: Date): string {
+    return getClinicDateParts(d).hhmm;
+  }
 
   /**
    * LLD 2.3: Çakışma Kontrolü
@@ -92,6 +175,27 @@ export class AppointmentsService {
     excludeId?: string,
     force = false,
   ): Promise<void> {
+    // 0. İzin kontrolü — yalnızca ONAYLANMIŞ izinler randevuyu engeller (ADR-003 Faz 2),
+    // aralık kesişimi (overlap) mantığıyla, force ile atlanamaz. doctorId bir Doctor.id
+    // olduğu için (Employee.doctorId köprüsü üzerinden) önce bağlı Employee bulunur —
+    // hekimin bir Employee (İK) kaydı yoksa izin kontrolü yapılmaz.
+    const employee = await tx.employee.findFirst({ where: { doctorId }, select: { id: true } });
+    if (employee) {
+      const activeLeave = await tx.employeeLeave.findFirst({
+        where: {
+          clinicId,
+          employeeId: employee.id,
+          status: 'APPROVED',
+          startAt: { lt: endOn },
+          endAt: { gt: startOn },
+        },
+      });
+
+      if (activeLeave) {
+        throw new ConflictException('Seçtiğiniz tarihte hekim izinlidir. Randevu oluşturulamaz.');
+      }
+    }
+
     // 1. Çakışan randevu kontrolü (Doktor) — artık sert engel değil: kullanıcı
     // çakışan hasta bilgilerini görüp onaylarsa (force:true) aynı saat dilimine
     // ikinci bir randevu eklenebilir.
@@ -148,15 +252,15 @@ export class AppointmentsService {
   }
 
   /**
-   * Mesai saati kontrolü — İK/personel mesai modülü kaldırıldığı için (bkz.
-   * scope-reduction kararı) artık hiçbir mesai tanımı yok; her zaman "mesai
-   * dışı değil" döner. İmza/endpoint geriye dönük uyumluluk için korunuyor.
+   * Mesai saati kontrolü (LLD spec §2.5.2). doctorId bir Doctor.id olduğu için
+   * (Employee.doctorId köprüsü üzerinden) önce bağlı Employee bulunur — hekimin
+   * bir Employee (İK) kaydı yoksa mesai tanımı da yoktur, "mesai dışı değil" döner.
    */
   async checkWorkHours(
-    _clinicId: string,
-    _employeeId: string,
-    _startOn: Date,
-    _endOn: Date,
+    clinicId: string,
+    doctorId: string,
+    startOn: Date,
+    endOn: Date,
   ): Promise<{
     outsideWorkHours: boolean;
     employeeName?: string | null;
@@ -164,7 +268,45 @@ export class AppointmentsService {
     workEnd?: string | null;
     message?: string;
   }> {
-    return { outsideWorkHours: false };
+    const tenantDb = await this.repo.getTenantDb();
+    const employee = await tenantDb.employee.findFirst({ where: { doctorId }, select: { id: true } });
+    if (!employee) {
+      return { outsideWorkHours: false };
+    }
+
+    const dayOfWeek = getClinicDateParts(startOn).dayOfWeek;
+    const wh = await tenantDb.employeeWorkHour.findFirst({
+      where: { clinicId, employeeId: employee.id, dayOfWeek },
+    });
+
+    if (!wh) {
+      return { outsideWorkHours: false };
+    }
+
+    const startTime = this.formatTimeOfDay(startOn);
+    const endTime = this.formatTimeOfDay(endOn);
+    const isOutside =
+      !wh.isWorking ||
+      !wh.startTime ||
+      !wh.endTime ||
+      startTime < wh.startTime ||
+      endTime > wh.endTime;
+
+    if (!isOutside) {
+      return { outsideWorkHours: false };
+    }
+
+    const employeeName = await this.repo.getDoctorName(doctorId);
+    const who = employeeName || 'Hekim';
+    return {
+      outsideWorkHours: true,
+      employeeName,
+      workStart: wh.isWorking ? wh.startTime : null,
+      workEnd: wh.isWorking ? wh.endTime : null,
+      message: wh.isWorking
+        ? `${who} mesai saatleri dışında randevu.`
+        : `${who} bu gün çalışmıyor.`,
+    };
   }
 
   /**
@@ -178,6 +320,18 @@ export class AppointmentsService {
     // Mesai dışı kontrolü bloke etmez, yalnızca kart üzerinde gösterilecek bilgiyi hesaplar (spec §2.5.2)
     const workHours = await this.checkWorkHours(clinicId, dto.doctorId, startOn, endOn);
 
+    // Şube açıkça belirtilmemişse, seçilen ünitin bağlı olduğu şube miras alınır
+    // (ünit fiziksel olarak zaten belirli bir klinikte bulunur).
+    let clinicBranchId = dto.clinicBranchId;
+    if (!clinicBranchId && dto.chairId) {
+      const tenantDb = await this.repo.getTenantDb();
+      const chair = await tenantDb.dentalChair.findFirst({
+        where: { id: dto.chairId, clinicId },
+        select: { clinicBranchId: true },
+      });
+      clinicBranchId = chair?.clinicBranchId || undefined;
+    }
+
     const appointment = await this.repo.runInTransaction(async (tx) => {
       await this.checkConflict(tx, clinicId, dto.doctorId, startOn, endOn, dto.chairId, undefined, dto.force);
 
@@ -187,6 +341,7 @@ export class AppointmentsService {
           patientId: dto.patientId,
           doctorId: dto.doctorId,
           chairId: dto.chairId || null,
+          clinicBranchId: clinicBranchId || null,
           startOn,
           endOn,
           status: 'PLANNED',
@@ -232,6 +387,201 @@ export class AppointmentsService {
   }
 
   /**
+   * ADR-004 §3: Google Calendar tarzı tekrarlı randevu serisi oluşturur.
+   * Occurrence tarihleri klinik yerel saatine göre üretilir (WEEKLY: önceki
+   * occurrence + interval*7 gün; MONTHLY: ilk occurrence'ın gün-of-ay değeri
+   * hedef ayın son gününe clamp edilerek korunur). Tüm occurrence'lar tek bir
+   * transaction'da üretilir; mevcut checkConflict tekrar kullanılır:
+   *  - Ünit çakışması (sert engel) → o occurrence atlanır, seri devam eder.
+   *  - Hekim çakışması (force:false) → 409 ile tüm-veya-hiç rollback.
+   */
+  async createSeries(dto: CreateAppointmentSeriesDto, clinicId: string) {
+    const hasCount = dto.count !== undefined && dto.count !== null;
+    const hasUntil = dto.until !== undefined && dto.until !== null;
+    if (hasCount === hasUntil) {
+      throw new BadRequestException('count veya until alanlarından tam olarak biri gönderilmelidir.');
+    }
+
+    const startOn = new Date(dto.startOn);
+    const endOn = new Date(dto.endOn);
+    if (Number.isNaN(startOn.getTime()) || Number.isNaN(endOn.getTime()) || endOn <= startOn) {
+      throw new BadRequestException('Geçersiz başlangıç/bitiş tarihi: endOn, startOn tarihinden sonra olmalıdır.');
+    }
+    const durationMinutes = Math.round((endOn.getTime() - startOn.getTime()) / 60000);
+
+    // ADR-004 §3: kötüye kullanım/kaza koruması — until en fazla startOn + 2 yıl olabilir.
+    const maxUntil = new Date(startOn);
+    maxUntil.setUTCFullYear(maxUntil.getUTCFullYear() + APPOINTMENT_SERIES_MAX_UNTIL_YEARS);
+
+    let untilDate: Date | undefined;
+    if (hasUntil) {
+      untilDate = new Date(dto.until!);
+      if (Number.isNaN(untilDate.getTime()) || untilDate < startOn) {
+        throw new BadRequestException('until tarihi startOn tarihinden önce olamaz.');
+      }
+      if (untilDate > maxUntil) {
+        throw new BadRequestException(
+          `until tarihi başlangıçtan itibaren en fazla ${APPOINTMENT_SERIES_MAX_UNTIL_YEARS} yıl sonrasına kadar olabilir.`,
+        );
+      }
+    }
+
+    // Occurrence başlangıç tarihlerini üret (count veya until sınırına kadar).
+    const occurrenceStarts: Date[] = [startOn];
+    if (hasCount) {
+      for (let i = 1; i < dto.count!; i++) {
+        occurrenceStarts.push(
+          dto.freq === 'WEEKLY'
+            ? addWeeklyOccurrence(occurrenceStarts[i - 1], dto.interval)
+            : addMonthlyOccurrence(startOn, i, dto.interval),
+        );
+      }
+    } else {
+      // until bazlı üretim — 2 yıl/haftalık kadans üst sınırında dahi makul
+      // kalan bir güvenlik sınırı (kötüye kullanım koruması, normalde asla ulaşılmaz).
+      const SAFETY_CAP = 500;
+      for (let i = 1; i < SAFETY_CAP; i++) {
+        const next =
+          dto.freq === 'WEEKLY'
+            ? addWeeklyOccurrence(occurrenceStarts[i - 1], dto.interval)
+            : addMonthlyOccurrence(startOn, i, dto.interval);
+        if (next > untilDate!) break;
+        occurrenceStarts.push(next);
+      }
+    }
+
+    const { series, occurrences, skipped } = await this.repo.runInTransaction(async (tx) => {
+      const seriesRow = await tx.appointmentSeries.create({
+        data: {
+          clinicId,
+          patientId: dto.patientId,
+          doctorId: dto.doctorId,
+          chairId: dto.chairId || null,
+          type: dto.type,
+          notes: dto.notes,
+          durationMinutes,
+          freq: dto.freq,
+          interval: dto.interval,
+          count: hasCount ? dto.count : null,
+          until: hasUntil ? untilDate : null,
+        },
+      });
+
+      const createdOccurrences: any[] = [];
+      const skippedOccurrences: { seq: number; startOn: Date; endOn: Date; reason: string }[] = [];
+      let seq = 0;
+
+      for (const occStart of occurrenceStarts) {
+        seq += 1;
+        const occEnd = new Date(occStart.getTime() + durationMinutes * 60000);
+
+        try {
+          await this.checkConflict(tx, clinicId, dto.doctorId, occStart, occEnd, dto.chairId, undefined, dto.force);
+        } catch (err) {
+          if (err instanceof ConflictException) {
+            const body: any = err.getResponse();
+            if (body && typeof body === 'object' && body.conflict === true) {
+              // Hekim çakışması (yumuşak, force verilmemiş) — tüm seri geri alınır.
+              throw err;
+            }
+            // Ünit çakışması (sert engel) — bu occurrence atlanır, seri devam eder.
+            skippedOccurrences.push({ seq, startOn: occStart, endOn: occEnd, reason: 'CHAIR_CONFLICT' });
+            continue;
+          }
+          throw err;
+        }
+
+        const created = await tx.appointment.create({
+          data: {
+            clinicId,
+            patientId: dto.patientId,
+            doctorId: dto.doctorId,
+            chairId: dto.chairId || null,
+            startOn: occStart,
+            endOn: occEnd,
+            status: 'PLANNED',
+            type: dto.type,
+            notes: dto.notes,
+            seriesId: seriesRow.id,
+            seriesSeq: seq,
+          },
+        });
+        createdOccurrences.push(created);
+      }
+
+      return { series: seriesRow, occurrences: createdOccurrences, skipped: skippedOccurrences };
+    });
+
+    for (const appt of occurrences) {
+      this.eventEmitter.emit(
+        EVENTS.APPOINTMENT_CREATED,
+        new AppointmentCreatedEvent(appt.id, clinicId, dto.patientId, dto.doctorId, appt.startOn, appt.endOn),
+      );
+    }
+
+    this.logger.log(
+      `Randevu serisi oluşturuldu: ${series.id} | ${occurrences.length} occurrence, ${skipped.length} atlandı | Klinik: ${clinicId}`,
+    );
+
+    return { seriesId: series.id, occurrences, skipped };
+  }
+
+  /**
+   * Seri detayını (meta veriler + tüm occurrence'lar) getirir.
+   */
+  async getSeries(id: string, clinicId: string) {
+    const tenantDb = await this.repo.getTenantDb();
+    const series = await tenantDb.appointmentSeries.findFirst({ where: { id, clinicId } });
+    if (!series) {
+      throw new NotFoundException(`Randevu serisi bulunamadı: ${id}`);
+    }
+
+    const occurrences = await tenantDb.appointment.findMany({
+      where: { seriesId: id, clinicId },
+      orderBy: { seriesSeq: 'asc' },
+    });
+
+    return { ...series, occurrences };
+  }
+
+  /**
+   * ADR-004 §3: "Bu ve sonraki etkinlikler" — Google Calendar'ın toplu iptal
+   * karşılığı. fromAppointmentId'nin seriesSeq'inden itibaren (dahil) seri
+   * içindeki tüm occurrence'ları CANCELLED yapar.
+   */
+  async cancelRemaining(seriesId: string, clinicId: string, fromAppointmentId: string) {
+    const tenantDb = await this.repo.getTenantDb();
+
+    const series = await tenantDb.appointmentSeries.findFirst({ where: { id: seriesId, clinicId } });
+    if (!series) {
+      throw new NotFoundException(`Randevu serisi bulunamadı: ${seriesId}`);
+    }
+
+    const fromAppointment = await tenantDb.appointment.findFirst({
+      where: { id: fromAppointmentId, clinicId, seriesId },
+    });
+    if (!fromAppointment) {
+      throw new NotFoundException(`Seri içinde randevu bulunamadı: ${fromAppointmentId}`);
+    }
+
+    const result = await tenantDb.appointment.updateMany({
+      where: {
+        seriesId,
+        clinicId,
+        seriesSeq: { gte: fromAppointment.seriesSeq },
+        status: { not: 'CANCELLED' },
+      },
+      data: { status: 'CANCELLED' },
+    });
+
+    this.logger.log(
+      `Seri ileriye dönük iptal edildi: ${seriesId} | seq>=${fromAppointment.seriesSeq} | ${result.count} randevu | Klinik: ${clinicId}`,
+    );
+
+    return { cancelledCount: result.count };
+  }
+
+  /**
    * Randevuyu genel olarak günceller (tarih, saat, hekim, ünit vb.).
    * Çakışma kontrollerini yapar ve gerekirse durum eventlerini tetikler.
    */
@@ -262,6 +612,25 @@ export class AppointmentsService {
     if (dto.status !== undefined) updateData.status = dto.status;
     if (dto.notes !== undefined) updateData.notes = dto.notes;
     if (dto.type !== undefined) updateData.type = dto.type;
+
+    if (dto.clinicBranchId !== undefined) {
+      updateData.clinicBranchId = dto.clinicBranchId || null;
+    } else if (dto.chairId) {
+      // Şube açıkça belirtilmemiş ama ünit değiştirilmişse, yeni ünitin şubesi miras alınır.
+      const tenantDb = await this.repo.getTenantDb();
+      const chair = await tenantDb.dentalChair.findFirst({
+        where: { id: dto.chairId, clinicId },
+        select: { clinicBranchId: true },
+      });
+      if (chair?.clinicBranchId) updateData.clinicBranchId = chair.clinicBranchId;
+    }
+
+    // ADR-004 §3: seri üyesi bir occurrence tek başına düzenlenirse, seriden
+    // ayrıştığını işaretlemek için seriesException=true set edilir (Google
+    // Calendar'daki "yalnızca bu etkinlik" davranışı).
+    if (existing.seriesId) {
+      updateData.seriesException = true;
+    }
 
     if (needsConflictCheck) {
       const workHours = await this.checkWorkHours(clinicId, doctorId, startOn, endOn);
@@ -398,7 +767,13 @@ export class AppointmentsService {
       return this.postpone(id, clinicId, existing, dto.newStartOn!, dto.newEndOn!);
     }
 
-    const updated = await this.repo.update(id, { status: dto.status });
+    // ADR-004 §3: seri üyesi bir occurrence'ın durumu tek başına değiştirilirse
+    // seriden ayrıştığını işaretlemek için seriesException=true set edilir.
+    const statusUpdateData: any = { status: dto.status };
+    if (existing.seriesId) {
+      statusUpdateData.seriesException = true;
+    }
+    const updated = await this.repo.update(id, statusUpdateData);
 
     // Domain Events
     if (dto.status === 'COMPLETED') {
@@ -445,20 +820,27 @@ export class AppointmentsService {
 
   /**
    * Takvim görünümü: Tarih aralığına göre randevuları getirir.
+   * startDate/endDate opsiyoneldir — verilmezse tarih aralığı filtresi
+   * uygulanmaz (ör. bir hastanın TÜM randevularını tarih penceresi olmadan
+   * çekmek için, bkz. GET /appointments?patientId=...).
    */
   async findByDate(
     clinicId: string,
-    startDate: string,
-    endDate: string,
+    startDate?: string,
+    endDate?: string,
     doctorId?: string,
     chairId?: string,
+    clinicBranchId?: string,
+    patientId?: string,
   ) {
     return this.repo.findByDateRange(
       clinicId,
-      new Date(startDate),
-      new Date(endDate),
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
       doctorId,
       chairId,
+      clinicBranchId,
+      patientId,
     );
   }
 
@@ -477,10 +859,9 @@ export class AppointmentsService {
 
   /**
    * Mini takvim doluluk özeti (spec §8.3): ay içindeki her gün için randevu
-   * sayısı. Mesai (kapasite) tanımı İK modülüyle birlikte kaldırıldığı için
-   * (bkz. scope-reduction kararı) capacityMinutes her zaman 0 döner —
-   * frontend'de doluluk yüzdesi artık hesaplanamaz, yalnızca günlük randevu
-   * sayısı gösterilir.
+   * sayısı ve toplam mesai kapasitesi (dakika). doctorIds bir Doctor.id listesi
+   * olduğu için (Employee.doctorId köprüsü üzerinden) önce bağlı Employee'ler
+   * bulunur — Employee (İK) kaydı olmayan hekimler kapasite hesabına girmez.
    */
   async getOccupancy(clinicId: string, month: string, doctorIds: string[]) {
     const [year, monthNum] = month.split('-').map(Number);
@@ -496,12 +877,32 @@ export class AppointmentsService {
     };
     if (doctorIds.length > 0) appointmentWhere.doctorId = { in: doctorIds };
 
-    const appointments = await tenantDb.appointment.findMany({ where: appointmentWhere, select: { startOn: true } });
+    const [appointments, employeeIds] = await Promise.all([
+      tenantDb.appointment.findMany({ where: appointmentWhere, select: { startOn: true } }),
+      doctorIds.length > 0
+        ? tenantDb.employee.findMany({ where: { doctorId: { in: doctorIds } }, select: { id: true } })
+        : Promise.resolve([]),
+    ]);
+
+    const workHours = employeeIds.length > 0
+      ? await tenantDb.employeeWorkHour.findMany({
+          where: { clinicId, employeeId: { in: employeeIds.map((e: any) => e.id) } },
+        })
+      : [];
 
     const totalsByDate = new Map<string, number>();
     for (const a of appointments) {
       const key = formatLocalDate(a.startOn);
       totalsByDate.set(key, (totalsByDate.get(key) || 0) + 1);
+    }
+
+    const capacityByDayOfWeek = new Map<number, number>();
+    for (const wh of workHours) {
+      if (!wh.isWorking || !wh.startTime || !wh.endTime) continue;
+      const [sh, sm] = wh.startTime.split(':').map(Number);
+      const [eh, em] = wh.endTime.split(':').map(Number);
+      const minutes = (eh * 60 + em) - (sh * 60 + sm);
+      capacityByDayOfWeek.set(wh.dayOfWeek, (capacityByDayOfWeek.get(wh.dayOfWeek) || 0) + Math.max(minutes, 0));
     }
 
     const days: { date: string; total: number; capacityMinutes: number }[] = [];
@@ -510,7 +911,7 @@ export class AppointmentsService {
       days.push({
         date: key,
         total: totalsByDate.get(key) || 0,
-        capacityMinutes: 0,
+        capacityMinutes: capacityByDayOfWeek.get(d.getDay()) || 0,
       });
     }
 
@@ -545,14 +946,35 @@ export class AppointmentsService {
     return chairs;
   }
 
-  async createChair(clinicId: string, dto: { name: string; color?: string }) {
+  async createChair(clinicId: string, dto: { name: string; color?: string; clinicBranchId?: string }) {
     const tenantDb = await this.repo.getTenantDb();
     return tenantDb.dentalChair.create({
       data: {
         clinicId,
         name: dto.name,
         color: dto.color || '#3b82f6',
+        clinicBranchId: dto.clinicBranchId || null,
       },
     });
+  }
+
+  async updateChair(
+    id: string,
+    clinicId: string,
+    dto: { name?: string; color?: string; clinicBranchId?: string; isActive?: boolean },
+  ) {
+    const tenantDb = await this.repo.getTenantDb();
+    const existing = await tenantDb.dentalChair.findFirst({ where: { id, clinicId } });
+    if (!existing) {
+      throw new NotFoundException(`Ünit (${id}) bulunamadı.`);
+    }
+
+    const updateData: any = {};
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.color !== undefined) updateData.color = dto.color;
+    if (dto.clinicBranchId !== undefined) updateData.clinicBranchId = dto.clinicBranchId || null;
+    if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
+
+    return tenantDb.dentalChair.update({ where: { id }, data: updateData });
   }
 }

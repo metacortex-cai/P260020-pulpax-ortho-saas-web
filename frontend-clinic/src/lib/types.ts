@@ -34,6 +34,7 @@ export interface Patient {
   createdAt: string;
   updatedAt: string;
   photoUrl?: string | null;
+  clinicBranchId?: string | null;
 }
 
 export interface CreatePatientPayload {
@@ -41,6 +42,17 @@ export interface CreatePatientPayload {
   lastName: string;
   phone: string;
   nationalId?: string;
+  clinicBranchId?: string;
+}
+
+// ==================== CLINIC BRANCH ====================
+
+export interface ClinicBranch {
+  id: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  isActive: boolean;
 }
 
 // ==================== APPOINTMENT ====================
@@ -52,6 +64,7 @@ export interface DentalChair {
   name: string;
   color?: string;
   isActive: boolean;
+  clinicBranchId?: string | null;
 }
 
 export interface Appointment {
@@ -59,6 +72,7 @@ export interface Appointment {
   patientId: string;
   doctorId: string;
   chairId?: string | null;
+  clinicBranchId?: string | null;
   status: AppointmentStatus;
   type?: string | null;
   startOn: string;
@@ -67,6 +81,12 @@ export interface Appointment {
   postponedFrom?: string | null;
   linkedTo?: string | null;
   isOutsideWorkHours?: boolean;
+  // ADR-004: tekrarlı randevu serisi alanları — occurrence'lar seriesId ile
+  // AppointmentSeries'e bağlanır, seriesSeq 1-tabanlı sıra ("3/8"), seriesException
+  // occurrence tek başına taşındı/iptal edildi mi (Google Calendar "yalnızca bu etkinlik").
+  seriesId?: string | null;
+  seriesSeq?: number | null;
+  seriesException?: boolean;
   createdAt: string;
   updatedAt: string;
   dentalChair?: {
@@ -80,6 +100,7 @@ export interface CreateAppointmentPayload {
   patientId: string;
   doctorId: string;
   chairId?: string;
+  clinicBranchId?: string;
   startOn: string;
   endOn: string;
   notes?: string;
@@ -88,6 +109,54 @@ export interface CreateAppointmentPayload {
   // Hekimin bu saat diliminde başka aktif randevusu varsa varsayılan olarak 409
   // (conflict) döner; force:true ile kullanıcı çakışmayı onaylayıp geçer.
   force?: boolean;
+}
+
+// ADR-004 §4: POST /appointments/series body — backend CreateAppointmentSeriesDto ile birebir.
+export interface CreateAppointmentSeriesPayload {
+  patientId: string;
+  doctorId: string;
+  chairId?: string;
+  type?: string;
+  notes?: string;
+  startOn: string;
+  endOn: string;
+  freq: 'WEEKLY' | 'MONTHLY';
+  interval: number;
+  count?: number;
+  until?: string;
+  force?: boolean;
+}
+
+export interface AppointmentSeriesSkipped {
+  seq: number;
+  startOn: string;
+  endOn: string;
+  reason: 'CHAIR_CONFLICT';
+}
+
+export interface CreateAppointmentSeriesResult {
+  seriesId: string;
+  occurrences: Appointment[];
+  skipped: AppointmentSeriesSkipped[];
+}
+
+export interface AppointmentSeries {
+  id: string;
+  clinicId: string;
+  patientId: string;
+  doctorId: string;
+  chairId?: string | null;
+  type?: string | null;
+  notes?: string | null;
+  durationMinutes: number;
+  freq: 'WEEKLY' | 'MONTHLY';
+  interval: number;
+  count?: number | null;
+  until?: string | null;
+  status: 'ACTIVE' | 'CANCELLED';
+  createdAt: string;
+  updatedAt: string;
+  occurrences: Appointment[];
 }
 
 export interface AppointmentConflictInfo {

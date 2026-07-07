@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Calendar, AlertCircle, Search, X, Trash2, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Filter, Download, FileText, ChevronDown, Check } from 'lucide-react';
-import Modal from '../../../../components/ui/Modal';
-import ConfirmModal from '../../../../components/ui/ConfirmModal';
 import Dropdown from '../../../../components/ui/Dropdown';
-import { AppointmentService } from '../../../../lib/services/appointment.service';
+import ConfirmModal from '../../../../components/ui/ConfirmModal';
+import AppointmentModal from '../../../../components/calendar/AppointmentModal';
+import { Appointment as CalendarAppointment } from '../../../../components/calendar/AppointmentBlock';
+import { AppointmentService, AppointmentWithPatient, AppointmentConflictInfo } from '../../../../lib/services/appointment.service';
+import { DoctorService } from '../../../../lib/services/doctor.service';
+import { ClinicBranchService, ClinicBranch } from '../../../../lib/services/clinic-branch.service';
+import { useToastStore } from '../../../../store/toastStore';
 import Skeleton from '../../../../components/ui/Skeleton';
-import { Appointment } from '../../../../lib/types';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
@@ -46,12 +49,23 @@ function SortableHeader({ label, column, sortColumn, sortDirection, onSort }: { 
   );
 }
 
+function doctorName(a: AppointmentWithPatient): string {
+  return a.doctor ? `Dt. ${a.doctor.firstName} ${a.doctor.lastName}` : '—';
+}
+
 export default function AppointmentsTab({ patient }: { patient: any }) {
-  const [modal, setModal] = useState(false);
+  const addToast = useToastStore(state => state.addToast);
+
   const [loading, setLoading] = useState(true);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentWithPatient[]>([]);
+  const [doctors, setDoctors] = useState<{ id: string; name: string }[]>([]);
+  const [chairs, setChairs] = useState<{ id: string; name: string; clinicBranchId?: string | null }[]>([]);
+  const [clinicBranches, setClinicBranches] = useState<ClinicBranch[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalData, setModalData] = useState<Partial<CalendarAppointment> | undefined>();
 
   // Arama, filtre, sıralama, sayfalama
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,39 +75,39 @@ export default function AppointmentsTab({ patient }: { patient: any }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageLimit, setPageLimit] = useState(10);
 
+  const fetchAppointments = useCallback(async () => {
+    if (!patient?.id) return;
+    try {
+      setLoading(true);
+      const [apps, staff, chs, branches] = await Promise.all([
+        AppointmentService.findByPatient(patient.id),
+        DoctorService.findAll(),
+        AppointmentService.getChairs(),
+        ClinicBranchService.findAll(),
+      ]);
+      setAppointments(apps);
+      setDoctors(staff.filter(s => s.isDoctor && s.isActive).map(s => ({ id: s.id, name: `Dt. ${s.firstName} ${s.lastName}` })));
+      setChairs(chs);
+      setClinicBranches(branches);
+    } catch (err) {
+      console.error('Failed to fetch appointments:', err);
+      addToast({ title: 'Hata', message: 'Randevular yüklenemedi.', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [patient?.id, addToast]);
+
   useEffect(() => {
-    async function fetchAppointments() {
-      try {
-        setLoading(true);
-        // Gerçek API entegrasyonu:
-        // const data = await AppointmentService.findByPatient(patient.id);
-        // setAppointments(data);
-
-        // Mock simülasyonu
-        setTimeout(() => {
-          setAppointments([
-            { id: '1', startOn: '2026-05-08T09:00:00', doctorId: 'Dr. Ayşe Kaya', status: 'PLANNED', patientId: patient.id, endOn: '', createdAt: '', updatedAt: '' },
-            { id: '2', startOn: '2026-05-01T14:30:00', doctorId: 'Dr. Ayşe Kaya', status: 'COMPLETED', patientId: patient.id, endOn: '', createdAt: '', updatedAt: '' },
-          ] as any);
-          setLoading(false);
-        }, 600);
-      } catch (err) {
-        console.error('Failed to fetch appointments:', err);
-        setLoading(false);
-      }
-    }
-
-    if (patient?.id) {
-      fetchAppointments();
-    }
-  }, [patient?.id]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount/patient-change pattern
+    fetchAppointments();
+  }, [fetchAppointments]);
 
   const exportCSV = () => {
     const rows = [
       ['Tarih & Saat', 'Hekim', 'Durum'],
       ...sortedAppointments.map(a => [
         format(new Date(a.startOn), 'dd.MM.yyyy HH:mm', { locale: tr }),
-        a.doctorId,
+        doctorName(a),
         STATUS_MAP[a.status]?.label || a.status,
       ]),
     ];
@@ -107,7 +121,7 @@ export default function AppointmentsTab({ patient }: { patient: any }) {
   // Arama + filtre
   const filtered = appointments.filter(a => {
     const statusLabel = STATUS_MAP[a.status]?.label || a.status;
-    const matchSearch = [a.doctorId, statusLabel, a.startOn]
+    const matchSearch = [doctorName(a), statusLabel, a.startOn]
       .join(' ').toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus = !filterStatus || a.status === filterStatus;
     return matchSearch && matchStatus;
@@ -116,8 +130,8 @@ export default function AppointmentsTab({ patient }: { patient: any }) {
   // Sıralama
   const sortedAppointments = [...filtered].sort((a, b) => {
     if (!sortColumn) return 0;
-    const aVal = sortColumn === 'status' ? (STATUS_MAP[a.status]?.label || a.status) : (a as any)[sortColumn] ?? '';
-    const bVal = sortColumn === 'status' ? (STATUS_MAP[b.status]?.label || b.status) : (b as any)[sortColumn] ?? '';
+    const aVal = sortColumn === 'status' ? (STATUS_MAP[a.status]?.label || a.status) : sortColumn === 'doctor' ? doctorName(a) : (a as any)[sortColumn] ?? '';
+    const bVal = sortColumn === 'status' ? (STATUS_MAP[b.status]?.label || b.status) : sortColumn === 'doctor' ? doctorName(b) : (b as any)[sortColumn] ?? '';
     if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
     if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
     return 0;
@@ -155,10 +169,117 @@ export default function AppointmentsTab({ patient }: { patient: any }) {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  const handleBulkDelete = () => {
-    setAppointments(prev => prev.filter(a => !selectedIds.includes(a.id)));
-    setSelectedIds([]);
-    setBulkDeleteConfirmOpen(false);
+  const handleBulkDelete = async () => {
+    try {
+      await Promise.all(selectedIds.map(id => AppointmentService.delete(id)));
+      addToast({ title: 'Başarılı', message: 'Seçilen randevular silindi.', type: 'success' });
+      setSelectedIds([]);
+      setBulkDeleteConfirmOpen(false);
+      fetchAppointments();
+    } catch (err: any) {
+      addToast({ title: 'Hata', message: err.response?.data?.message || 'Randevular silinemedi.', type: 'error' });
+    }
+  };
+
+  const openAddModal = () => {
+    setModalData({
+      patientId: patient.id,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      date: new Date().toISOString().split('T')[0],
+      startTime: '09:00',
+      endTime: '09:15',
+    });
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (a: AppointmentWithPatient) => {
+    setModalData({
+      id: a.id,
+      patientId: a.patientId,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      doctorId: a.doctorId,
+      chairId: a.chairId || '',
+      clinicBranchId: a.clinicBranchId || '',
+      date: a.startOn.split('T')[0],
+      startTime: new Date(a.startOn).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+      endTime: new Date(a.endOn).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+      status: a.status,
+      notes: a.notes || '',
+      ...(a.type ? { appointmentType: a.type } : {}),
+      ...(a.treatmentItems ? { treatmentItems: a.treatmentItems } : {}),
+    } as any);
+    setIsModalOpen(true);
+  };
+
+  // Randevu Ekle modalındaki gerçek AppointmentModal — ADR-004 §5: eski mock modal
+  // (setTimeout veri, işlevsiz Kaydet butonu) yerine appointments/page.tsx'in
+  // kullandığı gerçek bileşen; seri/senkron desteği bedavaya kazanılır.
+  const handleSaveModal = async (data: Partial<CalendarAppointment>, force?: boolean): Promise<AppointmentConflictInfo | void> => {
+    try {
+      const startOn = new Date(`${data.date}T${data.startTime}:00`).toISOString();
+      const endOn = new Date(`${data.date}T${data.endTime}:00`).toISOString();
+
+      const appointmentType = (data as any).appointmentType as string | undefined;
+      const treatmentItemIds = (data as any).treatmentItemIds as string[] | undefined;
+      const repeat = (data as any).repeat as { freq: 'WEEKLY' | 'MONTHLY'; interval: number; count?: number; until?: string } | undefined;
+
+      if (data.id) {
+        await AppointmentService.update(data.id, {
+          doctorId: data.doctorId,
+          chairId: data.chairId || null,
+          clinicBranchId: data.clinicBranchId || undefined,
+          patientId: data.patientId,
+          startOn,
+          endOn,
+          status: data.status as any,
+          notes: data.notes,
+          force,
+          ...(appointmentType ? { type: appointmentType } : {}),
+        });
+        addToast({ title: 'Başarılı', message: 'Randevu güncellendi.', type: 'success' });
+      } else if (repeat) {
+        const result = await AppointmentService.createSeries({
+          patientId: data.patientId!,
+          doctorId: data.doctorId!,
+          chairId: data.chairId || undefined,
+          notes: data.notes,
+          startOn,
+          endOn,
+          freq: repeat.freq,
+          interval: repeat.interval,
+          count: repeat.count,
+          until: repeat.until ? new Date(`${repeat.until}T23:59:59`).toISOString() : undefined,
+          force,
+          ...(appointmentType ? { type: appointmentType } : {}),
+        });
+        addToast({ title: 'Başarılı', message: `Randevu serisi oluşturuldu: ${result.occurrences.length} randevu.`, type: 'success' });
+        if (result.skipped.length > 0) {
+          addToast({ title: 'Uyarı', message: `${result.skipped.length} randevu ünit çakışması nedeniyle atlandı.`, type: 'warning' });
+        }
+      } else {
+        await AppointmentService.create({
+          patientId: data.patientId!,
+          doctorId: data.doctorId!,
+          chairId: data.chairId || undefined,
+          clinicBranchId: data.clinicBranchId || undefined,
+          startOn,
+          endOn,
+          notes: data.notes,
+          force,
+          ...(appointmentType ? { type: appointmentType } : {}),
+          ...(treatmentItemIds?.length ? { treatmentItemIds } : {}),
+        });
+        addToast({ title: 'Başarılı', message: 'Randevu oluşturuldu.', type: 'success' });
+      }
+      fetchAppointments();
+      setIsModalOpen(false);
+    } catch (err: any) {
+      const respData = err.response?.data;
+      if (err.response?.status === 409 && respData?.conflict) {
+        return { conflict: true, appointmentCount: respData.appointmentCount, appointments: respData.appointments || [] };
+      }
+      addToast({ title: 'Hata', message: respData?.message || 'İşlem başarısız.', type: 'error' });
+    }
   };
 
   return (
@@ -217,7 +338,7 @@ export default function AppointmentsTab({ patient }: { patient: any }) {
               <div className="px-4 py-2 border-b border-slate-100"><p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Format Seçin</p></div>
               <DropdownItem icon={<FileText size={14} className="text-red-500" />} label="CSV (.csv)" onClick={exportCSV} />
             </Dropdown>
-            <button onClick={() => setModal(true)}
+            <button onClick={openAddModal}
               className="flex items-center gap-1.5 h-9 px-3 bg-metronic-primary text-white rounded-lg text-[13px] font-bold hover:bg-blue-600 transition-colors whitespace-nowrap">
               <Plus size={14} /> Randevu Ekle
             </button>
@@ -232,11 +353,12 @@ export default function AppointmentsTab({ patient }: { patient: any }) {
                     type="checkbox"
                     checked={allSelected}
                     onChange={toggleSelectAll}
+                    onClick={e => e.stopPropagation()}
                     className="w-4 h-4 rounded border-slate-300 text-metronic-primary focus:ring-metronic-primary/30 cursor-pointer"
                   />
                 </th>
                 <SortableHeader label="Tarih & Saat" column="startOn" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader label="Hekim" column="doctorId" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader label="Hekim" column="doctor" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
                 <SortableHeader label="Durum" column="status" sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
               </tr>
             </thead>
@@ -267,12 +389,13 @@ export default function AppointmentsTab({ patient }: { patient: any }) {
                 paginated.map(a => {
                   const isSelected = selectedIds.includes(a.id);
                   return (
-                    <tr key={a.id} className={`hover:bg-slate-50 transition-colors ${isSelected ? 'bg-metronic-primary-light/10' : ''}`}>
+                    <tr key={a.id} onClick={() => openEditModal(a)} className={`hover:bg-slate-50 transition-colors cursor-pointer ${isSelected ? 'bg-metronic-primary-light/10' : ''}`}>
                       <td className="py-3 px-6">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelect(a.id)}
+                          onClick={e => e.stopPropagation()}
                           className="w-4 h-4 rounded border-slate-300 text-metronic-primary focus:ring-metronic-primary/30 cursor-pointer"
                         />
                       </td>
@@ -282,7 +405,7 @@ export default function AppointmentsTab({ patient }: { patient: any }) {
                           {format(new Date(a.startOn), 'dd MMMM yyyy HH:mm', { locale: tr })}
                         </div>
                       </td>
-                      <td className="py-3 px-6 text-[13px] text-slate-600">{a.doctorId}</td>
+                      <td className="py-3 px-6 text-[13px] text-slate-600">{doctorName(a)}</td>
                       <td className="py-3 px-6">
                         <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold ${STATUS_MAP[a.status]?.cls || 'bg-slate-100 text-slate-600'}`}>
                           {STATUS_MAP[a.status]?.label || a.status}
@@ -325,18 +448,16 @@ export default function AppointmentsTab({ patient }: { patient: any }) {
         )}
       </div>
 
-      {/* Randevu Ekle Modalı (Mevcut yapı korundu) */}
-      <Modal isOpen={modal} onClose={() => setModal(false)} title="Yeni Randevu" size="md"
-        footer={<><button onClick={() => setModal(false)} className="px-4 py-2 text-[13px] font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">İptal</button><button className="px-5 py-2 text-[13px] font-bold bg-metronic-primary text-white rounded-lg hover:bg-blue-600">Kaydet</button></>}>
-        <div className="space-y-4">
-          <div className="flex flex-col gap-1.5"><label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Hasta</label><input className="m-input" value={`${patient.firstName} ${patient.lastName}`} readOnly /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5"><label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tarih & Saat</label><input type="datetime-local" className="m-input" /></div>
-            <div className="flex flex-col gap-1.5"><label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Hekim</label><select className="m-input"><option>Dr. Ayşe Kaya</option><option>Dr. Mehmet Yıldız</option></select></div>
-          </div>
-          <div className="flex flex-col gap-1.5"><label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Açıklama</label><input className="m-input" placeholder="Tedavi / açıklama..." /></div>
-        </div>
-      </Modal>
+      <AppointmentModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveModal}
+        initialData={modalData}
+        doctors={doctors}
+        patients={[{ id: patient.id, firstName: patient.firstName, lastName: patient.lastName }]}
+        chairs={chairs}
+        clinicBranches={clinicBranches}
+      />
 
       <ConfirmModal
         isOpen={bulkDeleteConfirmOpen}

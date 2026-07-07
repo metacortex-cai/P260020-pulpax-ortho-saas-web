@@ -7,7 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OcrService } from './ocr.service';
 
 /**
- * Bu suite, tenant DB *içindeki* kayıtların (implant/diyagnoz/reçete/not/hasta
+ * Bu suite, tenant DB *içindeki* kayıtların (diyagnoz/reçete/not/hasta
  * güncelleme) doğru şekilde `clinicId` ile sahiplik kontrolüne tabi tutulduğunu
  * doğrular — fiziksel tenant izolasyonunu değil (bkz. common/tests/tenant-leakage.spec.ts),
  * aynı tenant veritabanı içinde farklı kliniklere ait kayıtların birbirine
@@ -20,7 +20,6 @@ describe('PatientsService — Klinik Bazlı Kayıt Sahipliği (IDOR) Testleri', 
   const clinicB = 'clinic-b';
 
   let patients: any[];
-  let implants: any[];
   let diagnoses: any[];
   let prescriptions: any[];
   let notes: any[];
@@ -36,19 +35,6 @@ describe('PatientsService — Klinik Bazlı Kayıt Sahipliği (IDOR) Testleri', 
           const matches = patients.filter((p) => p.id === where.id && p.clinicId === where.clinicId);
           matches.forEach((p) => Object.assign(p, data));
           return Promise.resolve({ count: matches.length });
-        }),
-      },
-      implantRecord: {
-        findFirst: jest.fn(({ where }: any) => Promise.resolve(findOwned(implants, where))),
-        findMany: jest.fn(({ where }: any) => Promise.resolve(implants.filter((i) => i.patientId === where.patientId))),
-        create: jest.fn(({ data }: any) => {
-          const rec = { id: `implant-${++idCounter}`, ...data };
-          implants.push(rec);
-          return Promise.resolve(rec);
-        }),
-        delete: jest.fn(({ where }: any) => {
-          implants = implants.filter((i) => i.id !== where.id);
-          return Promise.resolve({});
         }),
       },
       toothDiagnosis: {
@@ -103,7 +89,6 @@ describe('PatientsService — Klinik Bazlı Kayıt Sahipliği (IDOR) Testleri', 
       { id: 'patient-a', clinicId: clinicA, firstName: 'Ayşe' },
       { id: 'patient-b', clinicId: clinicB, firstName: 'Berk' },
     ];
-    implants = [{ id: 'implant-1', patientId: 'patient-a', toothNo: '11', status: 'BASARILI' }];
     diagnoses = [{ id: 'diag-1', patientId: 'patient-a', toothNum: 11 }];
     prescriptions = [{ id: 'presc-1', patientId: 'patient-a', protocolNo: 'X' }];
     notes = [{ id: 'note-1', patientId: 'patient-a', content: 'gizli not' }];
@@ -121,27 +106,6 @@ describe('PatientsService — Klinik Bazlı Kayıt Sahipliği (IDOR) Testleri', 
     }).compile();
 
     service = moduleRef.get(PatientsService);
-  });
-
-  describe('İmplant kayıtları', () => {
-    it('kendi kliniğinden implantları listeleyebilir', async () => {
-      const result = await service.getImplants('patient-a', clinicA);
-      expect(result).toHaveLength(1);
-    });
-
-    it('başka klinik bağlamıyla hasta implantlarını LİSTELEYEMEZ', async () => {
-      await expect(service.getImplants('patient-a', clinicB)).rejects.toThrow(NotFoundException);
-    });
-
-    it('başka klinik bağlamıyla implant SİLEMEZ (IDOR)', async () => {
-      await expect(service.deleteImplant('implant-1', clinicB)).rejects.toThrow(NotFoundException);
-      expect(implants).toHaveLength(1); // silinmedi
-    });
-
-    it('kendi kliniği implantı silebilir', async () => {
-      await service.deleteImplant('implant-1', clinicA);
-      expect(implants).toHaveLength(0);
-    });
   });
 
   describe('Diyagnoz kayıtları', () => {

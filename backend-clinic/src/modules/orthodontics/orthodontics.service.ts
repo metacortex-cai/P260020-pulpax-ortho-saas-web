@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { TenantPrismaService } from '../../prisma/tenant-prisma.service';
+import { AppointmentsService } from '../appointments/appointments.service';
 import {
   CreateOrthoCaseDto,
   UpdateOrthoCaseDto,
@@ -60,7 +61,10 @@ const CASE_INCLUDE = {
 export class OrthodonticsService {
   private readonly logger = new Logger(OrthodonticsService.name);
 
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly appointmentsService: AppointmentsService,
+  ) {}
 
   // ── Vaka (OrthoCase) ──────────────────────────────────────────────────
 
@@ -328,11 +332,24 @@ export class OrthodonticsService {
 
   // ── Faz 05 ilerleme kayıtları ─────────────────────────────────────────
 
+  /**
+   * ADR-004 §2: Zaman Çizelgesi ↔ Randevu senkronu.
+   * (a) Geriye bağlama: dto.appointmentId doluysa (frontend'de hastanın
+   *     visitDate civarındaki randevularından seçilir), ilgili randevu henüz
+   *     COMPLETED/CANCELLED değilse AppointmentsService.updateStatus ile
+   *     COMPLETED yapılır — takvim ve zaman çizelgesi tek işlemle senkron kalır.
+   * (b) İleriye bağlama: dto.scheduleNextAppointment doluysa, track→case
+   *     zincirinden çözülen hastayla type:'KONTROL' yeni bir randevu oluşturulur
+   *     — bir sonraki ziyarette (a) mekanizmasının eşleştireceği adaydır.
+   * Bu iki adım, ana ziyaret kaydının oluşturulmasını engellemez şekilde
+   * (visit zaten kaydedildikten sonra) çalışır; randevu tarafında oluşan bir
+   * hata (ör. çakışma) ziyaret kaydının kaybolmasına yol açmaz.
+   */
   async addAdjustmentVisit(trackId: string, dto: CreateAdjustmentVisitDto, clinicId: string) {
     const tenantDb = await this.tenantPrisma.getClient();
-    await this.assertTrack(trackId, clinicId);
+    const track = await this.assertTrack(trackId, clinicId);
 
-    return tenantDb.orthoAdjustmentVisit.create({
+    const visit = await tenantDb.orthoAdjustmentVisit.create({
       data: {
         trackId,
         visitDate: dto.visitDate ? new Date(dto.visitDate) : undefined,
@@ -348,6 +365,44 @@ export class OrthodonticsService {
         note: dto.note,
       },
     });
+
+    // (a) Geriye bağlama — bağlı randevu zaten kapanmadıysa tamamlandı yap.
+    // Ziyaret kaydı zaten oluşturuldu; bağlı randevu bulunamazsa (ör. bu
+    // arada silindi/başka kliniğe taşındı) bu senkron adımı sessizce atlanır
+    // — asıl klinik veri (ziyaret kaydı) kaybolmamalı.
+    if (dto.appointmentId) {
+      try {
+        const linkedAppointment = await this.appointmentsService.findOne(dto.appointmentId, clinicId);
+        if (linkedAppointment && !['COMPLETED', 'CANCELLED'].includes(linkedAppointment.status)) {
+          await this.appointmentsService.updateStatus(dto.appointmentId, clinicId, { status: 'COMPLETED' });
+        }
+      } catch (err) {
+        if (err instanceof NotFoundException) {
+          this.logger.warn(
+            `Ziyarete bağlı randevu bulunamadı (${dto.appointmentId}), tamamlanma senkronu atlandı.`,
+          );
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    // (b) İleriye bağlama — sonraki kontrolü takvime düş.
+    if (dto.scheduleNextAppointment) {
+      await this.appointmentsService.create(
+        {
+          patientId: track.case.patientId,
+          doctorId: dto.scheduleNextAppointment.doctorId,
+          chairId: dto.scheduleNextAppointment.chairId,
+          startOn: dto.scheduleNextAppointment.startOn,
+          endOn: dto.scheduleNextAppointment.endOn,
+          type: 'KONTROL',
+        } as any,
+        clinicId,
+      );
+    }
+
+    return visit;
   }
 
   async deleteAdjustmentVisit(visitId: string, clinicId: string) {
@@ -621,6 +676,9 @@ export class OrthodonticsService {
     const tenantDb = await this.tenantPrisma.getClient();
     const track = await tenantDb.orthoTreatmentTrack.findFirst({
       where: { id: trackId, case: { clinicId } },
+      // ADR-004 §2: addAdjustmentVisit içindeki randevu senkronu için
+      // hastanın (ve varsayılan hekimin) track→case zincirinden çözülmesi gerekiyor.
+      include: { case: { select: { patientId: true, doctorId: true } } },
     });
     if (!track) {
       throw new NotFoundException('Tedavi track kaydı bulunamadı veya bu kliniğe ait değil.');
