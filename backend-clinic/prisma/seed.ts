@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { PrismaClient as TenantPrismaClient } from '../src/prisma/tenant-client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
@@ -150,6 +151,43 @@ async function main() {
   });
 
   console.log(`✅ Created mapped clinic doctor: ${doctor.firstName} ${doctor.lastName}`);
+
+  // 4. Tenant DB'de eşlik eden bir Doctor kaydı oluştur (bkz. tenant.prisma).
+  // Employee/HR modülü kaldırıldığı için (scope-reduction kararı) klinik
+  // içindeki randevu/tedavi/ortodonti hekim seçim listelerinin dolu gelmesi
+  // için her klinikte en az bir gerçek Doctor satırı gerekir; bu olmadan
+  // taze bir ortamda hekim dropdown'ları boş kalır ve randevu/tedavi
+  // oluşturulamaz (doctorId zorunlu FK).
+  if (clinicA.databaseUrl) {
+    const tenantDb = new TenantPrismaClient({
+      datasources: { db: { url: clinicA.databaseUrl } },
+    });
+    try {
+      await tenantDb.$connect();
+      const tenantDoctor = await tenantDb.doctor.upsert({
+        where: { emailHash: hashEmail(doctorEmail) },
+        update: {
+          userId: doctor.id,
+          isActive: true,
+        },
+        create: {
+          clinicId: clinicA.id,
+          userId: doctor.id,
+          firstName: 'Ahmet',
+          lastName: 'Yılmaz',
+          email: encrypt(doctorEmail),
+          emailHash: hashEmail(doctorEmail),
+          isDoctor: true,
+          isActive: true,
+        },
+      });
+      console.log(`✅ Created tenant Doctor kaydı: ${tenantDoctor.firstName} ${tenantDoctor.lastName} (Klinik A)`);
+    } catch (err: any) {
+      console.error(`⚠️  Tenant Doctor kaydı oluşturulamadı (Klinik A): ${err.message}`);
+    } finally {
+      await tenantDb.$disconnect();
+    }
+  }
 
   console.log('🌱 Master DB Seeding completed successfully!');
 }
